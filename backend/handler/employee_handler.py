@@ -19,3 +19,31 @@ def get_employees_paginated():
 
     except Exception as e:
         return jsonify({"message": str(e)}), 500
+    
+def get_employee_by_id(user_id: int):
+    try:
+        result = Employee.get_by_id(user_id)
+        return jsonify(result), result["statusCode"]
+
+    except ValidationError as e:
+        return jsonify({"message": str(e)}), 400
+    except Exception as e:
+        return jsonify({"message": str(e)}), 500
+    
+def get_total_employee_pages():
+    try:
+        limit = request.args.get("limit", default=10, type=int)
+        limit = max(limit, 1)  # safety
+
+        total_employees = Employee.get_total()
+        total_pages = (total_employees + limit - 1) // limit  # ceil division
+
+        return jsonify({
+            "statusCode": 200,
+            "total_employees": total_employees,
+            "limit": limit,
+            "total_pages": total_pages
+        }), 200
+
+    except Exception as e:
+        return jsonify({"message": str(e)}), 500

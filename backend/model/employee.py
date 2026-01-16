@@ -65,6 +65,8 @@ class Employee(BaseModel):
         sql = "SELECT COUNT(*) AS total FROM [USERINFO]"
         result = fetch_query(sql)
         return result[0]["total"] if result else 0
+    
+    
 
     @staticmethod
     def get_paginated(page: int = 1, limit: int = 10):
@@ -95,7 +97,7 @@ class Employee(BaseModel):
                     ORDER BY [USERID]
                 )
                 ORDER BY [USERID]
-                """
+                """ 
 
             rows = fetch_query(sql)
 
@@ -116,6 +118,26 @@ class Employee(BaseModel):
                 "count": len(rows),
                 "data": rows
             }
+
+        except Exception as e:
+            return {"statusCode": 500, "message": str(e)}
+        
+    @staticmethod
+    def get_by_id(user_id: int):
+        try:
+            sql = f"SELECT * FROM [USERINFO] WHERE USERID = {user_id}"
+            rows = fetch_query(sql)
+
+            if not rows:
+                return {"statusCode": 404, "message": f"Employee with USERID {user_id} not found"}
+
+            # Convert PHOTO to Base64
+            for row in rows:
+                for k, v in row.items():
+                    if isinstance(v, bytes):
+                        row[k] = base64.b64encode(v).decode("utf-8")
+
+            return {"statusCode": 200, "data": rows[0]}  # single employee
 
         except Exception as e:
             return {"statusCode": 500, "message": str(e)}

@@ -42,3 +42,4 @@ def fetch_query(sql, params=None):
 
     return [dict(zip(columns, row)) for row in rows]
 
+
