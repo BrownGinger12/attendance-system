@@ -58,14 +58,19 @@ const AttendanceRecordPage: React.FC = () => {
     const grouped: { [key: string]: GroupedAttendance } = {};
 
     records.forEach((record) => {
+      // Extract time directly from the GMT string without timezone conversion
+      // Format: "Thu, 15 Jan 2026 10:41:08 GMT"
+      const timeMatch = record.CHECKTIME.match(/\d{2}:\d{2}:\d{2}/);
+      const dateMatch = record.CHECKTIME.match(/\d{2} \w{3} \d{4}/);
+
+      if (!timeMatch || !dateMatch) return;
+
+      const time = timeMatch[0];
+      const hour = parseInt(time.split(":")[0]);
+
+      // Parse date for grouping key
       const date = new Date(record.CHECKTIME);
       const dateKey = date.toISOString().split("T")[0];
-      const hour = date.getHours();
-      const time = date.toLocaleTimeString("en-US", {
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-      });
 
       const key = `${record.USERID}-${dateKey}`;
 
@@ -82,24 +87,20 @@ const AttendanceRecordPage: React.FC = () => {
 
       if (record.CHECKTYPE === "I") {
         if (isPM) {
-          // PM Check In - only set if not already set or if this is earlier
           if (!grouped[key].pmCheckIn || time < grouped[key].pmCheckIn!) {
             grouped[key].pmCheckIn = time;
           }
         } else {
-          // AM Check In - only set if not already set or if this is earlier
           if (!grouped[key].amCheckIn || time < grouped[key].amCheckIn!) {
             grouped[key].amCheckIn = time;
           }
         }
       } else if (record.CHECKTYPE === "O") {
         if (isPM) {
-          // PM Check Out - only set if not already set or if this is later
           if (!grouped[key].pmCheckOut || time > grouped[key].pmCheckOut!) {
             grouped[key].pmCheckOut = time;
           }
         } else {
-          // AM Check Out - only set if not already set or if this is later
           if (!grouped[key].amCheckOut || time > grouped[key].amCheckOut!) {
             grouped[key].amCheckOut = time;
           }
@@ -108,7 +109,6 @@ const AttendanceRecordPage: React.FC = () => {
     });
 
     return Object.values(grouped).sort((a, b) => {
-      // Sort by date (descending) then by employee name
       if (a.date !== b.date) {
         return b.date.localeCompare(a.date);
       }
@@ -130,14 +130,12 @@ const AttendanceRecordPage: React.FC = () => {
 
       const records = response.data;
 
-      // Check if records are empty
       if (!records || records.length === 0) {
         setAttendance([]);
         setLoading(false);
         return;
       }
 
-      // Fetch employee names for all records
       const recordsWithNames = await Promise.all(
         records.map(async (record) => ({
           ...record,
@@ -145,14 +143,12 @@ const AttendanceRecordPage: React.FC = () => {
         })),
       );
 
-      // Group the records
       const groupedRecords = groupAttendanceRecords(recordsWithNames);
       setAttendance(groupedRecords);
     } catch (err: any) {
-      // Handle 404 or any error - just show empty state
       console.log("No attendance records found:", err);
       setAttendance([]);
-      setError(null); // Don't show error, just empty state
+      setError(null);
     } finally {
       setLoading(false);
     }
@@ -171,7 +167,6 @@ const AttendanceRecordPage: React.FC = () => {
     });
   };
 
-  // Filter attendance by search query
   const filteredAttendance = attendance.filter((record) =>
     record.employeeName.toLowerCase().includes(searchQuery.toLowerCase()),
   );
@@ -193,8 +188,7 @@ const AttendanceRecordPage: React.FC = () => {
           animation: fadeIn 0.3s ease-out;
         }
       `}</style>
-      <div className="max-w-7xl">
-        {/* Header */}
+      <div className="w-full">
         <div className="mb-6">
           <h1 className="text-2xl font-semibold text-white mb-2">
             Attendance Records
@@ -204,9 +198,7 @@ const AttendanceRecordPage: React.FC = () => {
           </p>
         </div>
 
-        {/* Controls */}
         <div className="mb-6 flex flex-col sm:flex-row gap-4">
-          {/* View Mode Selector */}
           <div className="flex bg-slate-900 border border-slate-800 rounded-lg p-1">
             <button
               onClick={() => setViewMode("daily")}
@@ -230,7 +222,6 @@ const AttendanceRecordPage: React.FC = () => {
             </button>
           </div>
 
-          {/* Date Selector */}
           <div className="flex items-center gap-2">
             <Calendar className="w-5 h-5 text-slate-400" />
             {viewMode === "daily" ? (
@@ -251,7 +242,6 @@ const AttendanceRecordPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Search Bar */}
         <div className="mb-6">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
@@ -265,14 +255,12 @@ const AttendanceRecordPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Error Message */}
         {error && (
           <div className="mb-6 p-4 bg-red-900/20 border border-red-800 rounded-lg text-red-400 text-sm">
             {error}
           </div>
         )}
 
-        {/* Table */}
         <div className="bg-slate-900 border border-slate-800 rounded-lg overflow-hidden animate-fadeIn">
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -371,7 +359,6 @@ const AttendanceRecordPage: React.FC = () => {
             </table>
           </div>
 
-          {/* Summary */}
           {!loading && filteredAttendance.length > 0 && (
             <div className="px-6 py-4 border-t border-slate-800 flex items-center justify-between">
               <div className="text-sm text-slate-400">
