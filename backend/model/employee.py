@@ -2,7 +2,7 @@ from pydantic import BaseModel
 from typing import Optional
 import base64 
 import math
-from gateway.microsoft_db_gateway import fetch_query
+from gateway.microsoft_db_gateway import fetch_query, query
 
 class Employee(BaseModel):
     USERID: int
@@ -125,19 +125,66 @@ class Employee(BaseModel):
     @staticmethod
     def get_by_id(user_id: int):
         try:
-            sql = f"SELECT * FROM [USERINFO] WHERE USERID = {user_id}"
-            rows = fetch_query(sql)
+            sql = "SELECT * FROM [USERINFO] WHERE USERID = ?"
+            rows = fetch_query(sql, [user_id])
 
             if not rows:
-                return {"statusCode": 404, "message": f"Employee with USERID {user_id} not found"}
+                return {"statusCode": 404, "message": "Employee not found"}
 
-            # Convert PHOTO to Base64
-            for row in rows:
-                for k, v in row.items():
-                    if isinstance(v, bytes):
-                        row[k] = base64.b64encode(v).decode("utf-8")
+            row = rows[0]
+            photo = row.get("PHOTO")
 
-            return {"statusCode": 200, "data": rows[0]}  # single employee
+            if photo:
+                if isinstance(photo, str):
+                    row["PHOTO"] = photo.strip()
+                elif isinstance(photo, bytes):
+                    try:
+                        row["PHOTO"] = photo.decode("utf-16-le").strip()
+                    except UnicodeDecodeError:
+                        row["PHOTO"] = base64.b64encode(photo).decode("utf-8")
+
+            return {"statusCode": 200, "data": row}
+
+        except Exception as e:
+            return {"statusCode": 500, "message": str(e)}
+        
+    @staticmethod
+    def update(user_id: int, data: dict):
+        try:
+            # 1️⃣ Check existence (reuse your method)
+            existing = Employee.get_by_id(user_id)
+            if existing["statusCode"] != 200:
+                return existing
+
+            if not data:
+                return {"statusCode": 400, "message": "No update data provided"}
+
+            blocked = {"USERID", "Badgenumber"}
+
+            fields = []
+            values = []
+
+            for k, v in data.items():
+                if k in blocked:
+                    continue
+                fields.append(f"[{k}] = ?")
+                values.append(v)
+
+            if not fields:
+                return {"statusCode": 400, "message": "No valid fields to update"}
+
+            values.append(user_id)
+
+            sql = f"""
+            UPDATE [USERINFO]
+            SET {', '.join(fields)}
+            WHERE USERID = ?
+            """
+
+            # ✅ DO NOT iterate this
+            result = query(sql, values)
+
+            return result
 
         except Exception as e:
             return {"statusCode": 500, "message": str(e)}
