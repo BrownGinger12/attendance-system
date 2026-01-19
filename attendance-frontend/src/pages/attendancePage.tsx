@@ -193,7 +193,7 @@ const AttendanceRecordPage: React.FC = () => {
           animation: fadeIn 0.3s ease-out;
         }
       `}</style>
-      <div className="w-full">
+      <div className="max-w-7xl">
         {/* Header */}
         <div className="mb-6">
           <h1 className="text-2xl font-semibold text-white mb-2">
