@@ -47,3 +47,17 @@ def get_total_employee_pages():
 
     except Exception as e:
         return jsonify({"message": str(e)}), 500
+    
+def update_employee(user_id):
+    try:
+        data = request.get_json(silent=True)
+
+        if not data:
+            return jsonify({"message": "No data provided"}), 400
+
+        response = Employee.update(user_id, data)
+
+        return jsonify(response), response["statusCode"]
+
+    except Exception as e:
+        return jsonify({"message": str(e)}), 500

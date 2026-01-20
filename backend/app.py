@@ -1,12 +1,23 @@
 from flask import Flask
 from flask_cors import CORS
-from handler.employee_handler import get_employee_by_id, get_employees_paginated, get_total_employee_pages
+from handler.employee_handler import get_employee_by_id, get_employees_paginated, get_total_employee_pages, update_employee
 from handler.attendance_record_handler import get_attendance_month, get_attendance_day, get_attendance_employee
+from handler.department_handler import get_departments, get_department_by_id
 
 app = Flask(__name__)
 
 # Enable CORS for all routes
 CORS(app)
+
+
+@app.route("/departments", methods=["GET"])
+def departments():
+    return get_departments()
+
+
+@app.route("/department/<int:dept_id>", methods=["GET"])
+def department(dept_id):
+    return get_department_by_id(dept_id)
 
 # -------------------------
 # Employee endpoints
@@ -23,6 +34,9 @@ def employee(user_id):
 def employees_total_pages():
     return get_total_employee_pages()
 
+@app.route("/employee/<int:user_id>", methods=["PUT"])
+def update_employee_api(user_id):
+    return update_employee(user_id)
 # -------------------------
 # Attendance endpoints
 # -------------------------
