@@ -237,20 +237,6 @@ const RealtimeAttendancePage: React.FC = () => {
     });
   };
 
-  const getTimeAgo = (dateString: string) => {
-    const now = new Date();
-    const checkTime = new Date(dateString);
-    const diffMs = now.getTime() - checkTime.getTime();
-    const diffSecs = Math.floor(diffMs / 1000);
-    const diffMins = Math.floor(diffSecs / 60);
-    const diffHours = Math.floor(diffMins / 60);
-
-    if (diffSecs < 60) return "Just now";
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    return formatDate(dateString);
-  };
-
   const notClockedIn = totalEmployees - (onTimeCount + lateCount);
   const attendanceArray = Array.from(employeeAttendance.values());
 
@@ -274,7 +260,7 @@ const RealtimeAttendancePage: React.FC = () => {
 
   return (
     <div className="w-full h-full bg-slate-950 p-6">
-      <div className="w-full">
+      <div className="max-w-7xl">
         {/* Header */}
         <div className="mb-6 flex items-center justify-between">
           <div>
@@ -400,89 +386,136 @@ const RealtimeAttendancePage: React.FC = () => {
             </div>
           </div>
 
-          <div className="overflow-y-auto max-h-[600px]">
-            {filteredAttendance.length === 0 ? (
-              <div className="p-12 text-center text-slate-500">
-                <Activity className="w-12 h-12 mx-auto mb-3 text-slate-700" />
-                {attendanceArray.length === 0 ? (
-                  <>
-                    <p>Waiting for attendance logs...</p>
-                    <p className="text-sm mt-2">
-                      New check-ins and check-outs will appear here in real-time
-                    </p>
-                  </>
+          {/* Table */}
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-slate-800/50 border-b border-slate-700">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                    Employee
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                    Date
+                  </th>
+                  <th className="px-6 py-3 text-center text-xs font-medium text-slate-400 uppercase tracking-wider">
+                    AM In
+                  </th>
+                  <th className="px-6 py-3 text-center text-xs font-medium text-slate-400 uppercase tracking-wider">
+                    AM Out
+                  </th>
+                  <th className="px-6 py-3 text-center text-xs font-medium text-slate-400 uppercase tracking-wider">
+                    PM In
+                  </th>
+                  <th className="px-6 py-3 text-center text-xs font-medium text-slate-400 uppercase tracking-wider">
+                    PM Out
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800">
+                {filteredAttendance.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={6}
+                      className="px-6 py-12 text-center text-slate-500"
+                    >
+                      {attendanceArray.length === 0 ? (
+                        <div>
+                          <Activity className="w-12 h-12 mx-auto mb-3 text-slate-700" />
+                          <p>No attendance records available for this period</p>
+                        </div>
+                      ) : (
+                        <div>
+                          <p>No employees found</p>
+                          <p className="text-sm mt-2">
+                            Try adjusting your search or filter
+                          </p>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
                 ) : (
-                  <>
-                    <p>No employees found</p>
-                    <p className="text-sm mt-2">
-                      Try adjusting your search or filter
-                    </p>
-                  </>
+                  filteredAttendance.map((employee) => {
+                    const checkInTime = employee.checkIn
+                      ? new Date(employee.checkIn.CHECKTIME)
+                      : null;
+                    const checkOutTime = employee.checkOut
+                      ? new Date(employee.checkOut.CHECKTIME)
+                      : null;
+                    const checkInHour = checkInTime
+                      ? checkInTime.getHours()
+                      : null;
+                    const checkOutHour = checkOutTime
+                      ? checkOutTime.getHours()
+                      : null;
+
+                    // Determine AM/PM slots
+                    const amIn =
+                      checkInHour !== null && checkInHour < 12
+                        ? formatTimeAMPM(employee.checkIn!.CHECKTIME)
+                        : "-";
+                    const amOut =
+                      checkOutHour !== null && checkOutHour <= 12
+                        ? formatTimeAMPM(employee.checkOut!.CHECKTIME)
+                        : "-";
+                    const pmIn =
+                      checkInHour !== null && checkInHour >= 12
+                        ? formatTimeAMPM(employee.checkIn!.CHECKTIME)
+                        : "-";
+                    const pmOut =
+                      checkOutHour !== null && checkOutHour > 12
+                        ? formatTimeAMPM(employee.checkOut!.CHECKTIME)
+                        : "-";
+
+                    return (
+                      <tr
+                        key={employee.USERID}
+                        className="hover:bg-slate-800/50 transition-colors"
+                      >
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center flex-shrink-0">
+                              <User className="w-4 h-4 text-slate-400" />
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <p className="text-sm font-medium text-white">
+                                  {employee.employeeName}
+                                </p>
+                                {employee.isLate && (
+                                  <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-900/30 text-red-400 border border-red-800">
+                                    Late
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-xs text-slate-500">
+                                ID: {employee.USERID}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">
+                          {employee.checkIn
+                            ? formatDate(employee.checkIn.CHECKTIME)
+                            : "-"}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-center text-sm text-slate-300">
+                          {amIn}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-center text-sm text-slate-300">
+                          {amOut}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-center text-sm text-slate-300">
+                          {pmIn}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-center text-sm text-slate-300">
+                          {pmOut}
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
-              </div>
-            ) : (
-              <div className="divide-y divide-slate-800">
-                {filteredAttendance.map((employee) => (
-                  <div
-                    key={employee.USERID}
-                    className="p-4 hover:bg-slate-800/50 transition-colors"
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-start gap-3 flex-1">
-                        {/* Avatar */}
-                        <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center flex-shrink-0">
-                          <User className="w-5 h-5 text-slate-400" />
-                        </div>
-
-                        {/* Info */}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <p className="text-white font-medium truncate">
-                              {employee.employeeName}
-                            </p>
-                            {employee.isLate && (
-                              <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-900/30 text-red-400 border border-red-800">
-                                Late
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-3 text-sm text-slate-400">
-                            <span className="flex items-center gap-1">
-                              <span className="text-slate-500">ID:</span>
-                              {employee.USERID}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Time In/Out */}
-                      <div className="text-right ml-4 flex-shrink-0 space-y-2">
-                        {employee.checkIn && (
-                          <div>
-                            <p className="text-xs text-slate-500 mb-1">
-                              Time In
-                            </p>
-                            <p className="text-white font-medium text-sm">
-                              {formatTimeAMPM(employee.checkIn.CHECKTIME)}
-                            </p>
-                          </div>
-                        )}
-                        {employee.checkOut && (
-                          <div>
-                            <p className="text-xs text-slate-500 mb-1">
-                              Time Out
-                            </p>
-                            <p className="text-white font-medium text-sm">
-                              {formatTimeAMPM(employee.checkOut.CHECKTIME)}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
