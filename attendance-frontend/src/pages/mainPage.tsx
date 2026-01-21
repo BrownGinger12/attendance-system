@@ -3,6 +3,7 @@ import Navbar from "../components/navBar";
 import Sidebar from "../components/sideBar";
 import EmployeePage from "./employeePage";
 import AttendanceRecordPage from "./attendancePage";
+import RealtimeAttendancePage from "./realtimeAttendancePage";
 
 const MainPage: React.FC = () => {
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(true);
@@ -22,16 +23,7 @@ const MainPage: React.FC = () => {
           </div>
         );
       case "realtimeAttendance":
-        return (
-          <div className="text-white">
-            <h1 className="text-2xl font-semibold mb-2">
-              Real-time Attendance
-            </h1>
-            <p className="text-slate-400">
-              Real-time attendance page coming soon...
-            </p>
-          </div>
-        );
+        return <RealtimeAttendancePage />;
       default:
         return <EmployeePage />;
     }
