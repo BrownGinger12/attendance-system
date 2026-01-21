@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Activity, Wifi, WifiOff, User } from "lucide-react";
-import { io, Socket } from "socket.io-client";
+import { io } from "socket.io-client";
 import employeeService from "../services/employeeService";
 
 interface AttendanceLog {
@@ -19,7 +19,6 @@ interface AttendanceLog {
 const ATTENDANCE_NS = "/attendance";
 
 const RealtimeAttendancePage: React.FC = () => {
-  const [socket, setSocket] = useState<Socket | null>(null);
   const [logs, setLogs] = useState<AttendanceLog[]>([]);
   const [isConnected, setIsConnected] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string>("Disconnected");
@@ -29,63 +28,62 @@ const RealtimeAttendancePage: React.FC = () => {
   const maxLogs = 50; // Keep last 50 logs
 
   useEffect(() => {
-    // Connect to SocketIO backend with namespace
-    const newSocket = io("http://127.0.0.1:5000" + ATTENDANCE_NS, {
-      transports: ["websocket"],
+    const socket = io("http://127.0.0.1:5000/attendance", {
       path: "/socket.io",
-      autoConnect: true,
-      forceNew: true,
-      withCredentials: false,
+      transports: ["websocket"],
+      reconnection: true,
     });
 
-    setSocket(newSocket);
-
-    // Handle connection
-    newSocket.on("connect", () => {
+    socket.on("connect", () => {
       console.log("Connected to attendance namespace");
       setIsConnected(true);
       setStatusMessage("Connected to attendance namespace");
     });
 
-    // Handle disconnect
-    newSocket.on("disconnect", () => {
+    socket.on("status", (data) => {
+      console.log("Status:", data.message);
+      setStatusMessage(data.message);
+    });
+
+    // Initial data
+    socket.on("attendance:init", async (data) => {
+      console.log("Initial attendance data:", data);
+
+      // Fetch employee names for initial data
+      const logsWithNames = await Promise.all(
+        data.map(async (log: AttendanceLog) => ({
+          ...log,
+          employeeName: await fetchEmployeeName(log.USERID),
+        })),
+      );
+
+      setLogs(logsWithNames.slice(0, maxLogs));
+    });
+
+    // New attendance records
+    socket.on("new_attendance", async (record) => {
+      console.log("New record:", record);
+
+      // Fetch employee name for new record
+      const recordWithName = {
+        ...record,
+        employeeName: await fetchEmployeeName(record.USERID),
+      };
+
+      setLogs((prev) => {
+        const updated = [recordWithName, ...prev];
+        return updated.slice(0, maxLogs);
+      });
+    });
+
+    socket.on("disconnect", () => {
       console.log("Disconnected from attendance namespace");
       setIsConnected(false);
       setStatusMessage("Disconnected");
     });
 
-    // Listen for new attendance records
-    newSocket.on(
-      "attendance:new",
-      async (data: AttendanceLog | AttendanceLog[]) => {
-        console.log("New attendance:", data);
-
-        // Handle both single log and array of logs
-        const newLogs = Array.isArray(data) ? data : [data];
-
-        // Fetch employee names for new logs
-        const logsWithNames = await Promise.all(
-          newLogs.map(async (log) => ({
-            ...log,
-            employeeName: await fetchEmployeeName(log.USERID),
-          })),
-        );
-
-        setLogs((prev) => {
-          const updated = [...logsWithNames, ...prev];
-          return updated.slice(0, maxLogs);
-        });
-      },
-    );
-
-    // Listen for status messages
-    newSocket.on("status", (data: { message: string }) => {
-      console.log("Status:", data.message);
-      setStatusMessage(data.message);
-    });
-
     return () => {
-      newSocket.disconnect();
+      socket.disconnect();
     };
   }, []);
 

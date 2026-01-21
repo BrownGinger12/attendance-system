@@ -4,6 +4,7 @@ from flask_cors import CORS
 from flask_socketio import SocketIO, emit
 import os
 import threading
+from datetime import datetime, date, time as dtime
 
 from handler.dtr_generator_handler import fill_dtr_document
 from handler.employee_handler import (
@@ -28,13 +29,12 @@ CORS(app)
 
 # Use threading mode to avoid Eventlet issues
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
-
 ATTENDANCE_NS = '/attendance'
 
 # ------------------------------
 # Attendance Watcher
 # ------------------------------
-watcher = AttendanceWatcher(socketio)
+watcher = AttendanceWatcher(socketio, namespace=ATTENDANCE_NS)
 
 # Start watcher in a separate daemon thread
 threading.Thread(target=watcher.start, daemon=True).start()
@@ -47,9 +47,21 @@ def on_connect():
     print("Attendance socket connected")
     emit("status", {"message": "Connected to attendance namespace"})
 
+    # Send today's attendance immediately
+    today_start = datetime.combine(date.today(), dtime.min)
+    rows = watcher.get_today_attendance()  # method we'll add in AttendanceWatcher
+
+    # Convert CHECKTIME to ISO string
+    for r in rows:
+        if isinstance(r.get("CHECKTIME"), datetime):
+            r["CHECKTIME"] = r["CHECKTIME"].isoformat()
+
+    emit("attendance:init", rows)
+
 @socketio.on('disconnect', namespace=ATTENDANCE_NS)
 def on_disconnect():
     print("Attendance socket disconnected")
+
 
 # ------------------------------
 # Department endpoints
