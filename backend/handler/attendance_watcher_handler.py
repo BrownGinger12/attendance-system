@@ -17,7 +17,7 @@ class AttendanceWatcher:
         self.interval = interval
         self.last_checktime: datetime | None = None
         self.running = False
-    
+
     def start(self):
         """Start the watcher loop"""
         self.running = True
@@ -41,11 +41,15 @@ class AttendanceWatcher:
                 for record in records:
                     self.last_checktime = record["CHECKTIME"]
 
+                    # Convert CHECKTIME to string so it's JSON serializable
+                    if isinstance(record.get("CHECKTIME"), datetime):
+                        record["CHECKTIME"] = record["CHECKTIME"].isoformat()  # or use strftime
+
                     # 🔥 Emit to client
                     self.socketio.emit(
                         'new_attendance',  # event name
                         record,            # data
-                        namespace=self.namespace
+                        namespace=self.namespace  # make sure this is set in __init__
                     )
 
             except Exception as e:
