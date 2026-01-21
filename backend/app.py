@@ -1,39 +1,47 @@
-import eventlet
-
-eventlet.monkey_patch()
-
+# app.py
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 from flask_socketio import SocketIO, emit
 import os
-import tempfile
-import json
 import threading
 
 from handler.dtr_generator_handler import fill_dtr_document
-from handler.employee_handler import get_employee_by_id, get_employees_paginated, get_total_employee_pages, update_employee
-from handler.attendance_record_handler import get_attendance_month, get_attendance_day, get_attendance_employee
+from handler.employee_handler import (
+    get_employee_by_id,
+    get_employees_paginated,
+    get_total_employee_pages,
+    update_employee
+)
+from handler.attendance_record_handler import (
+    get_attendance_month,
+    get_attendance_day,
+    get_attendance_employee
+)
 from handler.department_handler import get_departments, get_department_by_id
 from handler.attendance_watcher_handler import AttendanceWatcher
 
-
-
+# ------------------------------
+# Flask + SocketIO setup
+# ------------------------------
 app = Flask(__name__)
+CORS(app)
 
-socketio = SocketIO(app, cors_allowed_origins="*")
-
-watcher = AttendanceWatcher(socketio)
-
-threading.Thread(
-    target=watcher.start,
-    daemon=True
-).start()
+# Use threading mode to avoid Eventlet issues
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 
 ATTENDANCE_NS = '/attendance'
 
-CORS(app)
+# ------------------------------
+# Attendance Watcher
+# ------------------------------
+watcher = AttendanceWatcher(socketio)
 
-#websocket events
+# Start watcher in a separate daemon thread
+threading.Thread(target=watcher.start, daemon=True).start()
+
+# ------------------------------
+# WebSocket events
+# ------------------------------
 @socketio.on('connect', namespace=ATTENDANCE_NS)
 def on_connect():
     print("Attendance socket connected")
@@ -43,7 +51,9 @@ def on_connect():
 def on_disconnect():
     print("Attendance socket disconnected")
 
-#department endpoints
+# ------------------------------
+# Department endpoints
+# ------------------------------
 @app.route("/departments", methods=["GET"])
 def departments():
     return get_departments()
@@ -52,8 +62,9 @@ def departments():
 def department(dept_id):
     return get_department_by_id(dept_id)
 
-
+# ------------------------------
 # Employee endpoints
+# ------------------------------
 @app.route("/employees", methods=["GET"])
 def employees():
     return get_employees_paginated()
@@ -70,79 +81,59 @@ def employees_total_pages():
 def update_employee_api(user_id):
     return update_employee(user_id)
 
-
+# ------------------------------
 # Attendance endpoints
+# ------------------------------
 @app.route("/attendance/employee", methods=["GET"])
 def attendance_employee():
     return get_attendance_employee()
 
-# Attendance for all employees by month
 @app.route("/attendance/month", methods=["GET"])
 def attendance_month():
     return get_attendance_month()
 
-# Attendance for all employees by day
 @app.route("/attendance/day", methods=["GET"])
 def attendance_day():
     return get_attendance_day()
 
+# ------------------------------
 # Export DTR endpoint
+# ------------------------------
 @app.route('/api/fill-dtr-json', methods=['POST'])
 def fill_dtr_json():
     """
     Fill DTR document with attendance data and download it
-    
-    Expects:
-    - JSON body with:
-      - 'name': Employee name
-      - 'data': Attendance data array
-    
-    Returns:
-    - DOCX file download
     """
     try:
         json_data = request.get_json()
-        
-        if not json_data:
-            return jsonify({
-                'error': 'No JSON data provided'
-            }), 400
-        
-        if 'name' not in json_data or 'data' not in json_data:
-            return jsonify({
-                'error': 'JSON must contain "name" and "data" fields'
-            }), 400
-        
-        template_path = "C:\\Users\\miles\\OneDrive\\Desktop\\attendance-system\\backend\\dtr\\template\\dtr-temp.docx"
-        
+        if not json_data or 'name' not in json_data or 'data' not in json_data:
+            return jsonify({'error': 'JSON must contain "name" and "data"'}), 400
+
+        template_path = "dtr/template/dtr-temp.docx"
         if not os.path.exists(template_path):
-            return jsonify({
-                'error': f'Template file not found: {template_path}'
-            }), 404
-        
-        filled_doc, employee_name, month_name, attendance_days = fill_dtr_document(
-            template_path, json_data
-        )
-        
-        output_filename = f"DTR_{employee_name.replace(' ', '_')}_{month_name.replace(' ', '_')}.docx"
-        
+            return jsonify({'error': f'Template not found: {template_path}'}), 404
+
+        filled_doc, employee_name, month_name, attendance_days = fill_dtr_document(template_path, json_data)
+
         from io import BytesIO
         doc_buffer = BytesIO()
         filled_doc.save(doc_buffer)
         doc_buffer.seek(0)
-        
+
+        output_filename = f"DTR_{employee_name.replace(' ', '_')}_{month_name.replace(' ', '_')}.docx"
+
         return send_file(
             doc_buffer,
             mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
             as_attachment=True,
             download_name=output_filename
         )
-    
     except Exception as e:
-        return jsonify({
-            'error': str(e)
-        }), 500
+        return jsonify({'error': str(e)}), 500
 
-
+# ------------------------------
+# Run the app
+# ------------------------------
 if __name__ == "__main__":
+    # No eventlet, just threading mode
     socketio.run(app, debug=True, host="0.0.0.0", port=5000)

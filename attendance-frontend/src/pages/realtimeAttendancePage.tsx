@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { Activity, Wifi, WifiOff, User } from "lucide-react";
 import { io, Socket } from "socket.io-client";
 import employeeService from "../services/employeeService";
@@ -7,51 +7,56 @@ interface AttendanceLog {
   USERID: number;
   CHECKTIME: string;
   CHECKTYPE: string;
-  VERIFYCODE: number;
-  SENSORID: string;
-  Memoinfo: string;
-  WorkCode: string | null;
-  sn: string | null;
-  UserExtFmt: number | null;
+  VERIFYCODE?: number;
+  SENSORID?: string;
+  Memoinfo?: string;
+  WorkCode?: string | null;
+  sn?: string | null;
+  UserExtFmt?: number | null;
   employeeName?: string;
 }
 
+const ATTENDANCE_NS = "/attendance";
+
 const RealtimeAttendancePage: React.FC = () => {
+  const [socket, setSocket] = useState<Socket | null>(null);
   const [logs, setLogs] = useState<AttendanceLog[]>([]);
   const [isConnected, setIsConnected] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<string>("Disconnected");
   const [employeeCache, setEmployeeCache] = useState<{ [key: number]: string }>(
     {},
   );
-  const socketRef = useRef<Socket | null>(null);
   const maxLogs = 50; // Keep last 50 logs
 
   useEffect(() => {
-    // Connect to WebSocket
-    const socket = io("http://127.0.0.1:5000/attendance", {
+    // Connect to SocketIO backend with namespace
+    const newSocket = io("http://127.0.0.1:5000" + ATTENDANCE_NS, {
       transports: ["websocket"],
-      reconnection: true,
-      reconnectionDelay: 1000,
-      reconnectionAttempts: 5,
+      path: "/socket.io",
+      autoConnect: true,
+      forceNew: true,
+      withCredentials: false,
     });
 
-    socketRef.current = socket;
+    setSocket(newSocket);
 
-    socket.on("connect", () => {
+    // Handle connection
+    newSocket.on("connect", () => {
       console.log("Connected to attendance namespace");
       setIsConnected(true);
+      setStatusMessage("Connected to attendance namespace");
     });
 
-    socket.on("disconnect", () => {
+    // Handle disconnect
+    newSocket.on("disconnect", () => {
       console.log("Disconnected from attendance namespace");
       setIsConnected(false);
+      setStatusMessage("Disconnected");
     });
 
-    socket.on("status", (data) => {
-      console.log("Status:", data.message);
-    });
-
-    socket.on(
-      "new_attendance",
+    // Listen for new attendance records
+    newSocket.on(
+      "attendance:new",
       async (data: AttendanceLog | AttendanceLog[]) => {
         console.log("New attendance:", data);
 
@@ -66,16 +71,21 @@ const RealtimeAttendancePage: React.FC = () => {
           })),
         );
 
-        setLogs((prevLogs) => {
-          const updated = [...logsWithNames, ...prevLogs];
-          // Keep only the latest logs
+        setLogs((prev) => {
+          const updated = [...logsWithNames, ...prev];
           return updated.slice(0, maxLogs);
         });
       },
     );
 
+    // Listen for status messages
+    newSocket.on("status", (data: { message: string }) => {
+      console.log("Status:", data.message);
+      setStatusMessage(data.message);
+    });
+
     return () => {
-      socket.disconnect();
+      newSocket.disconnect();
     };
   }, []);
 
@@ -129,7 +139,7 @@ const RealtimeAttendancePage: React.FC = () => {
 
   return (
     <div className="w-full h-full bg-slate-950 p-6">
-      <div className="w-full">
+      <div className="max-w-7xl">
         {/* Header */}
         <div className="mb-6 flex items-center justify-between">
           <div>
@@ -264,10 +274,12 @@ const RealtimeAttendancePage: React.FC = () => {
                               <span className="text-slate-500">ID:</span>
                               {log.USERID}
                             </span>
-                            <span className="flex items-center gap-1">
-                              <span className="text-slate-500">Sensor:</span>
-                              {log.SENSORID}
-                            </span>
+                            {log.SENSORID && (
+                              <span className="flex items-center gap-1">
+                                <span className="text-slate-500">Sensor:</span>
+                                {log.SENSORID}
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>

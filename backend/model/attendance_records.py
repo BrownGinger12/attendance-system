@@ -84,7 +84,7 @@ class AttendanceRecord(BaseModel):
             return {"statusCode": 500, "message": str(e)}
         
     @staticmethod
-    def get_after_today(after_time: datetime):
+    def get_after(after_time: datetime):
         """
         Get all attendance records of today after the given datetime.
         """
