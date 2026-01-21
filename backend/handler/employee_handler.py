@@ -61,3 +61,15 @@ def update_employee(user_id):
 
     except Exception as e:
         return jsonify({"message": str(e)}), 500
+
+def get_employee_count():
+    try:
+        total_employees = Employee.get_total()
+
+        return jsonify({
+            "statusCode": 200,
+            "total_employees": total_employees
+        }), 200
+
+    except Exception as e:
+        return jsonify({"message": str(e)}), 500

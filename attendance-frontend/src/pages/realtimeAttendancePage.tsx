@@ -1,5 +1,15 @@
 import React, { useState, useEffect } from "react";
-import { Activity, Wifi, WifiOff, User } from "lucide-react";
+import {
+  Activity,
+  Wifi,
+  WifiOff,
+  User,
+  Clock,
+  UserCheck,
+  UserX,
+  Search,
+  Filter,
+} from "lucide-react";
 import { io } from "socket.io-client";
 import employeeService from "../services/employeeService";
 
@@ -16,18 +26,48 @@ interface AttendanceLog {
   employeeName?: string;
 }
 
+interface EmployeeAttendance {
+  USERID: number;
+  employeeName: string;
+  checkIn?: AttendanceLog;
+  checkOut?: AttendanceLog;
+  isLate: boolean;
+}
+
 const ATTENDANCE_NS = "/attendance";
 
 const RealtimeAttendancePage: React.FC = () => {
   const [logs, setLogs] = useState<AttendanceLog[]>([]);
+  const [employeeAttendance, setEmployeeAttendance] = useState<
+    Map<number, EmployeeAttendance>
+  >(new Map());
   const [isConnected, setIsConnected] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string>("Disconnected");
   const [employeeCache, setEmployeeCache] = useState<{ [key: number]: string }>(
     {},
   );
-  const maxLogs = 50; // Keep last 50 logs
+  const [totalEmployees, setTotalEmployees] = useState<number>(0);
+  const [lateCount, setLateCount] = useState<number>(0);
+  const [onTimeCount, setOnTimeCount] = useState<number>(0);
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [filterStatus, setFilterStatus] = useState<"all" | "late" | "ontime">(
+    "all",
+  );
 
   useEffect(() => {
+    // Fetch total employees count
+    const fetchTotalEmployees = async () => {
+      try {
+        const response = await fetch("http://127.0.0.1:5000/employees/count");
+        const data = await response.json();
+        setTotalEmployees(data.total_employees);
+      } catch (err) {
+        console.error("Error fetching total employees:", err);
+      }
+    };
+
+    fetchTotalEmployees();
+
     const socket = io("http://127.0.0.1:5000/attendance", {
       path: "/socket.io",
       transports: ["websocket"],
@@ -45,26 +85,20 @@ const RealtimeAttendancePage: React.FC = () => {
       setStatusMessage(data.message);
     });
 
-    // Initial data
     socket.on("attendance:init", async (data) => {
       console.log("Initial attendance data:", data);
-
-      // Fetch employee names for initial data
       const logsWithNames = await Promise.all(
         data.map(async (log: AttendanceLog) => ({
           ...log,
           employeeName: await fetchEmployeeName(log.USERID),
         })),
       );
-
-      setLogs(logsWithNames.slice(0, maxLogs));
+      setLogs(logsWithNames);
+      processAttendanceLogs(logsWithNames);
     });
 
-    // New attendance records
     socket.on("new_attendance", async (record) => {
       console.log("New record:", record);
-
-      // Fetch employee name for new record
       const recordWithName = {
         ...record,
         employeeName: await fetchEmployeeName(record.USERID),
@@ -72,7 +106,8 @@ const RealtimeAttendancePage: React.FC = () => {
 
       setLogs((prev) => {
         const updated = [recordWithName, ...prev];
-        return updated.slice(0, maxLogs);
+        processAttendanceLogs(updated);
+        return updated;
       });
     });
 
@@ -103,13 +138,94 @@ const RealtimeAttendancePage: React.FC = () => {
     }
   };
 
-  const formatTime = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleTimeString("en-US", {
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
+  const isLateCheckIn = (checkTime: string): boolean => {
+    const date = new Date(checkTime);
+    const hour = date.getHours();
+    const minute = date.getMinutes();
+
+    // Late if after 8:10 AM or after 1:10 PM
+    if ((hour === 8 && minute > 10) || (hour > 8 && hour < 13)) {
+      return true;
+    }
+    if ((hour === 13 && minute > 10) || hour > 13) {
+      return true;
+    }
+    return false;
+  };
+
+  const processAttendanceLogs = (allLogs: AttendanceLog[]) => {
+    const attendanceMap = new Map<number, EmployeeAttendance>();
+
+    // Get today's logs only
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const todayLogs = allLogs.filter((log) => {
+      const logDate = new Date(log.CHECKTIME);
+      logDate.setHours(0, 0, 0, 0);
+      return logDate.getTime() === today.getTime();
     });
+
+    todayLogs.forEach((log) => {
+      const userId = log.USERID;
+
+      if (!attendanceMap.has(userId)) {
+        attendanceMap.set(userId, {
+          USERID: userId,
+          employeeName: log.employeeName || "Unknown",
+          isLate: false,
+        });
+      }
+
+      const employee = attendanceMap.get(userId)!;
+
+      if (log.CHECKTYPE === "I") {
+        // Keep earliest check-in
+        if (
+          !employee.checkIn ||
+          new Date(log.CHECKTIME) < new Date(employee.checkIn.CHECKTIME)
+        ) {
+          employee.checkIn = log;
+          employee.isLate = isLateCheckIn(log.CHECKTIME);
+        }
+      } else if (log.CHECKTYPE === "O") {
+        // Keep earliest check-out
+        if (
+          !employee.checkOut ||
+          new Date(log.CHECKTIME) < new Date(employee.checkOut.CHECKTIME)
+        ) {
+          employee.checkOut = log;
+        }
+      }
+    });
+
+    setEmployeeAttendance(attendanceMap);
+
+    // Calculate statistics
+    let late = 0;
+    let onTime = 0;
+
+    attendanceMap.forEach((emp) => {
+      if (emp.checkIn) {
+        if (emp.isLate) {
+          late++;
+        } else {
+          onTime++;
+        }
+      }
+    });
+
+    setLateCount(late);
+    setOnTimeCount(onTime);
+  };
+
+  const formatTimeAMPM = (dateString: string): string => {
+    const date = new Date(dateString);
+    const hours = date.getHours();
+    const minutes = date.getMinutes();
+    const ampm = hours >= 12 ? "PM" : "AM";
+    const displayHours = hours % 12 || 12;
+    return `${displayHours}:${minutes.toString().padStart(2, "0")} ${ampm}`;
   };
 
   const formatDate = (dateString: string) => {
@@ -135,9 +251,30 @@ const RealtimeAttendancePage: React.FC = () => {
     return formatDate(dateString);
   };
 
+  const notClockedIn = totalEmployees - (onTimeCount + lateCount);
+  const attendanceArray = Array.from(employeeAttendance.values());
+
+  // Filter and search
+  const filteredAttendance = attendanceArray.filter((employee) => {
+    // Search filter
+    const matchesSearch =
+      employee.employeeName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      employee.USERID.toString().includes(searchQuery);
+
+    // Status filter
+    let matchesFilter = true;
+    if (filterStatus === "late") {
+      matchesFilter = employee.isLate;
+    } else if (filterStatus === "ontime") {
+      matchesFilter = !employee.isLate && employee.checkIn !== undefined;
+    }
+
+    return matchesSearch && matchesFilter;
+  });
+
   return (
     <div className="w-full h-full bg-slate-950 p-6">
-      <div className="max-w-7xl">
+      <div className="w-full">
         {/* Header */}
         <div className="mb-6 flex items-center justify-between">
           <div>
@@ -172,15 +309,29 @@ const RealtimeAttendancePage: React.FC = () => {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
           <div className="bg-slate-900 border border-slate-800 rounded-lg p-4">
             <div className="flex items-center gap-3">
+              <div className="p-2 bg-red-900/30 rounded-lg">
+                <Clock className="w-5 h-5 text-red-400" />
+              </div>
+              <div>
+                <p className="text-slate-400 text-xs uppercase tracking-wider">
+                  Late Employees
+                </p>
+                <p className="text-white text-2xl font-semibold">{lateCount}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-slate-900 border border-slate-800 rounded-lg p-4">
+            <div className="flex items-center gap-3">
               <div className="p-2 bg-green-900/30 rounded-lg">
-                <Activity className="w-5 h-5 text-green-400" />
+                <UserCheck className="w-5 h-5 text-green-400" />
               </div>
               <div>
                 <p className="text-slate-400 text-xs uppercase tracking-wider">
-                  Total Logs
+                  On Time
                 </p>
                 <p className="text-white text-2xl font-semibold">
-                  {logs.length}
+                  {onTimeCount}
                 </p>
               </div>
             </div>
@@ -188,31 +339,15 @@ const RealtimeAttendancePage: React.FC = () => {
 
           <div className="bg-slate-900 border border-slate-800 rounded-lg p-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-900/30 rounded-lg">
-                <User className="w-5 h-5 text-blue-400" />
+              <div className="p-2 bg-orange-900/30 rounded-lg">
+                <UserX className="w-5 h-5 text-orange-400" />
               </div>
               <div>
                 <p className="text-slate-400 text-xs uppercase tracking-wider">
-                  Check-ins
+                  Not Clocked In
                 </p>
                 <p className="text-white text-2xl font-semibold">
-                  {logs.filter((l) => l.CHECKTYPE === "I").length}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-slate-900 border border-slate-800 rounded-lg p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-purple-900/30 rounded-lg">
-                <User className="w-5 h-5 text-purple-400" />
-              </div>
-              <div>
-                <p className="text-slate-400 text-xs uppercase tracking-wider">
-                  Check-outs
-                </p>
-                <p className="text-white text-2xl font-semibold">
-                  {logs.filter((l) => l.CHECKTYPE === "O").length}
+                  {notClockedIn}
                 </p>
               </div>
             </div>
@@ -222,27 +357,75 @@ const RealtimeAttendancePage: React.FC = () => {
         {/* Live Feed */}
         <div className="bg-slate-900 border border-slate-800 rounded-lg overflow-hidden">
           <div className="p-4 border-b border-slate-800">
-            <h2 className="text-white font-semibold flex items-center gap-2">
-              <Activity className="w-5 h-5 text-green-400" />
-              Live Feed
-            </h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-white font-semibold flex items-center gap-2">
+                <Activity className="w-5 h-5 text-green-400" />
+                Today's Attendance
+              </h2>
+              <span className="text-slate-400 text-sm">
+                {filteredAttendance.length} of {attendanceArray.length}{" "}
+                employees
+              </span>
+            </div>
+
+            {/* Search and Filter */}
+            <div className="flex flex-col sm:flex-row gap-3">
+              {/* Search Bar */}
+              <div className="flex-1 relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-500" />
+                <input
+                  type="text"
+                  placeholder="Search by name or ID..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+
+              {/* Filter Dropdown */}
+              <div className="relative">
+                <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" />
+                <select
+                  value={filterStatus}
+                  onChange={(e) =>
+                    setFilterStatus(e.target.value as "all" | "late" | "ontime")
+                  }
+                  className="pl-10 pr-8 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none cursor-pointer"
+                >
+                  <option value="all">All Employees</option>
+                  <option value="late">Late Only</option>
+                  <option value="ontime">On Time Only</option>
+                </select>
+              </div>
+            </div>
           </div>
 
           <div className="overflow-y-auto max-h-[600px]">
-            {logs.length === 0 ? (
+            {filteredAttendance.length === 0 ? (
               <div className="p-12 text-center text-slate-500">
                 <Activity className="w-12 h-12 mx-auto mb-3 text-slate-700" />
-                <p>Waiting for attendance logs...</p>
-                <p className="text-sm mt-2">
-                  New check-ins and check-outs will appear here in real-time
-                </p>
+                {attendanceArray.length === 0 ? (
+                  <>
+                    <p>Waiting for attendance logs...</p>
+                    <p className="text-sm mt-2">
+                      New check-ins and check-outs will appear here in real-time
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p>No employees found</p>
+                    <p className="text-sm mt-2">
+                      Try adjusting your search or filter
+                    </p>
+                  </>
+                )}
               </div>
             ) : (
               <div className="divide-y divide-slate-800">
-                {logs.map((log, index) => (
+                {filteredAttendance.map((employee) => (
                   <div
-                    key={index}
-                    className="p-4 hover:bg-slate-800/50 transition-colors animate-fadeIn"
+                    key={employee.USERID}
+                    className="p-4 hover:bg-slate-800/50 transition-colors"
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex items-start gap-3 flex-1">
@@ -255,41 +438,45 @@ const RealtimeAttendancePage: React.FC = () => {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
                             <p className="text-white font-medium truncate">
-                              {log.employeeName || "Loading..."}
+                              {employee.employeeName}
                             </p>
-                            <span
-                              className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                                log.CHECKTYPE === "I"
-                                  ? "bg-green-900/30 text-green-400 border border-green-800"
-                                  : "bg-blue-900/30 text-blue-400 border border-blue-800"
-                              }`}
-                            >
-                              {log.CHECKTYPE === "I" ? "Check In" : "Check Out"}
-                            </span>
+                            {employee.isLate && (
+                              <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-900/30 text-red-400 border border-red-800">
+                                Late
+                              </span>
+                            )}
                           </div>
                           <div className="flex items-center gap-3 text-sm text-slate-400">
                             <span className="flex items-center gap-1">
                               <span className="text-slate-500">ID:</span>
-                              {log.USERID}
+                              {employee.USERID}
                             </span>
-                            {log.SENSORID && (
-                              <span className="flex items-center gap-1">
-                                <span className="text-slate-500">Sensor:</span>
-                                {log.SENSORID}
-                              </span>
-                            )}
                           </div>
                         </div>
                       </div>
 
-                      {/* Time */}
-                      <div className="text-right ml-4 flex-shrink-0">
-                        <p className="text-white font-medium text-sm">
-                          {formatTime(log.CHECKTIME)}
-                        </p>
-                        <p className="text-slate-500 text-xs mt-1">
-                          {getTimeAgo(log.CHECKTIME)}
-                        </p>
+                      {/* Time In/Out */}
+                      <div className="text-right ml-4 flex-shrink-0 space-y-2">
+                        {employee.checkIn && (
+                          <div>
+                            <p className="text-xs text-slate-500 mb-1">
+                              Time In
+                            </p>
+                            <p className="text-white font-medium text-sm">
+                              {formatTimeAMPM(employee.checkIn.CHECKTIME)}
+                            </p>
+                          </div>
+                        )}
+                        {employee.checkOut && (
+                          <div>
+                            <p className="text-xs text-slate-500 mb-1">
+                              Time Out
+                            </p>
+                            <p className="text-white font-medium text-sm">
+                              {formatTimeAMPM(employee.checkOut.CHECKTIME)}
+                            </p>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>

@@ -11,7 +11,8 @@ from handler.employee_handler import (
     get_employee_by_id,
     get_employees_paginated,
     get_total_employee_pages,
-    update_employee
+    update_employee,
+    get_employee_count
 )
 from handler.attendance_record_handler import (
     get_attendance_month,
@@ -92,6 +93,10 @@ def employees_total_pages():
 @app.route("/employee/<int:user_id>", methods=["PUT"])
 def update_employee_api(user_id):
     return update_employee(user_id)
+
+@app.route("/employees/count", methods=["GET"])
+def employees_count():
+    return get_employee_count()
 
 # ------------------------------
 # Attendance endpoints
