@@ -260,7 +260,7 @@ const RealtimeAttendancePage: React.FC = () => {
 
   return (
     <div className="w-full h-full bg-slate-950 p-6">
-      <div className="max-w-7xl">
+      <div className="w-full">
         {/* Header */}
         <div className="mb-6 flex items-center justify-between">
           <div>

@@ -195,6 +195,23 @@ export const employeeService = {
     );
     return response.data;
   },
+
+  // Get employee attendance by month
+  getEmployeeAttendance: async (
+    userId: number,
+    month: string,
+  ): Promise<any> => {
+    const response = await apiClient.get(`/attendance/employee`, {
+      params: { user_id: userId, month },
+    });
+    return response.data;
+  },
+
+  // Export DTR
+  exportDTR: async (payload: any): Promise<any> => {
+    const response = await apiClient.post("/api/fill-dtr-json", payload);
+    return response.data;
+  },
 };
 
 export default employeeService;

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { X, Edit2, Save, User } from "lucide-react";
+import { X, Edit2, Save, User, Download } from "lucide-react";
 import employeeService, { Department } from "../services/employeeService";
 
 interface EmployeeModalProps {
@@ -28,6 +28,7 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Edit form state
@@ -55,11 +56,9 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({
       // Handle photo - base64 string
       if (response.data.PHOTO) {
         const photoData = response.data.PHOTO.trim();
-        // Check if it already has the data URL prefix
         if (photoData.startsWith("data:image")) {
           setPhotoPreview(photoData);
         } else {
-          // Add the data URL prefix for base64 string
           setPhotoPreview(`data:image/jpeg;base64,${photoData}`);
         }
       } else {
@@ -109,12 +108,10 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({
       }
 
       if (editPhoto) {
-        // Convert photo to bytes (base64)
         const reader = new FileReader();
         const photoBytes = await new Promise<string>((resolve) => {
           reader.onloadend = () => {
             const base64 = reader.result as string;
-            // Remove data URL prefix to get just the base64 string
             const base64Data = base64.split(",")[1];
             resolve(base64Data);
           };
@@ -142,7 +139,6 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({
     setEditDeptId(employee?.DEFAULTDEPTID || 0);
     setEditPhoto(null);
 
-    // Reset photo preview
     if (employee?.PHOTO) {
       const photoData = employee.PHOTO.trim();
       if (photoData.startsWith("data:image")) {
@@ -156,6 +152,62 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({
     setError(null);
   };
 
+  const handleExportDTR = async () => {
+    setExporting(true);
+    setError(null);
+    try {
+      const currentDate = new Date();
+      const month = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, "0")}`;
+
+      const attendanceResponse = await employeeService.getEmployeeAttendance(
+        userId,
+        month,
+      );
+
+      if (!attendanceResponse.data || attendanceResponse.data.length === 0) {
+        setError("No attendance data found for this month");
+        setExporting(false);
+        return;
+      }
+
+      const payload = {
+        name: employee?.Name || "Unknown",
+        data: attendanceResponse.data,
+      };
+
+      // Call the export DTR API and get blob response
+      const response = await fetch("http://127.0.0.1:5000/api/fill-dtr-json", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to export DTR");
+      }
+
+      // Get the blob (DOCX file)
+      const blob = await response.blob();
+
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `DTR_${employee?.Name}_${month}.docx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      setError("Failed to export DTR");
+      console.error("Error exporting DTR:", err);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const getDepartmentName = (deptId: number): string => {
     const dept = departments.find((d) => d.DEPTID === deptId);
     return dept ? dept.DEPTNAME : `Dept ${deptId}`;
@@ -165,16 +217,13 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({
 
   return (
     <>
-      {/* Black overlay */}
       <div
         className="fixed inset-0 bg-black bg-opacity-75 z-40 animate-fadeIn"
         onClick={onClose}
       />
 
-      {/* Modal */}
       <div className="fixed inset-0 flex items-center justify-center z-50 p-4">
         <div className="bg-slate-900 border border-slate-800 rounded-lg w-full max-w-md animate-fadeIn">
-          {/* Header */}
           <div className="flex items-center justify-between p-6 border-b border-slate-800">
             <h2 className="text-xl font-semibold text-white">
               {isEditing ? "Edit Employee" : "Employee Information"}
@@ -187,7 +236,6 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({
             </button>
           </div>
 
-          {/* Content */}
           <div className="p-6">
             {loading ? (
               <div className="flex items-center justify-center py-12">
@@ -197,7 +245,6 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({
               <div className="text-center py-8 text-red-400">{error}</div>
             ) : employee ? (
               <div className="space-y-6">
-                {/* Photo */}
                 <div className="flex flex-col items-center">
                   <div className="relative">
                     {photoPreview ? (
@@ -225,7 +272,6 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({
                   </div>
                 </div>
 
-                {/* Name */}
                 <div>
                   <label className="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-2">
                     Name
@@ -242,7 +288,6 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({
                   )}
                 </div>
 
-                {/* Employee ID */}
                 <div>
                   <label className="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-2">
                     Employee ID
@@ -250,7 +295,6 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({
                   <p className="text-slate-300">{employee.Badgenumber}</p>
                 </div>
 
-                {/* Department */}
                 <div>
                   <label className="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-2">
                     Department
@@ -274,7 +318,6 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({
                   )}
                 </div>
 
-                {/* Error Message */}
                 {error && (
                   <div className="p-3 bg-red-900/20 border border-red-800 rounded-lg text-red-400 text-sm">
                     {error}
@@ -284,45 +327,64 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({
             ) : null}
           </div>
 
-          {/* Footer */}
           {employee && (
-            <div className="flex items-center justify-end gap-3 p-6 border-t border-slate-800">
-              {isEditing ? (
-                <>
+            <div className="flex items-center justify-between gap-3 p-6 border-t border-slate-800">
+              <button
+                onClick={handleExportDTR}
+                disabled={exporting || isEditing}
+                className="px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
+              >
+                {exporting ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Exporting...
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-4 h-4" />
+                    Export DTR
+                  </>
+                )}
+              </button>
+
+              <div className="flex items-center gap-3">
+                {isEditing ? (
+                  <>
+                    <button
+                      onClick={handleCancel}
+                      disabled={saving}
+                      className="px-4 py-2 text-sm font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleSave}
+                      disabled={saving}
+                      className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
+                    >
+                      {saving ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          Saving...
+                        </>
+                      ) : (
+                        <>
+                          <Save className="w-4 h-4" />
+                          Save Changes
+                        </>
+                      )}
+                    </button>
+                  </>
+                ) : (
                   <button
-                    onClick={handleCancel}
-                    disabled={saving}
-                    className="px-4 py-2 text-sm font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors disabled:opacity-50"
+                    onClick={() => setIsEditing(true)}
+                    className="px-4 py-2 text-sm font-medium text-white bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors flex items-center gap-2"
                   >
-                    Cancel
+                    <Edit2 className="w-4 h-4" />
+                    Edit
                   </button>
-                  <button
-                    onClick={handleSave}
-                    disabled={saving}
-                    className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
-                  >
-                    {saving ? (
-                      <>
-                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        Saving...
-                      </>
-                    ) : (
-                      <>
-                        <Save className="w-4 h-4" />
-                        Save Changes
-                      </>
-                    )}
-                  </button>
-                </>
-              ) : (
-                <button
-                  onClick={() => setIsEditing(true)}
-                  className="px-4 py-2 text-sm font-medium text-white bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors flex items-center gap-2"
-                >
-                  <Edit2 className="w-4 h-4" />
-                  Edit
-                </button>
-              )}
+                )}
+              </div>
             </div>
           )}
         </div>

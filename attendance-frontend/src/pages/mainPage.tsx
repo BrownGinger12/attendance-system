@@ -13,6 +13,15 @@ const MainPage: React.FC = () => {
     switch (activePage) {
       case "employee":
         return <EmployeePage />;
+      case "employeeStat":
+        return (
+          <div className="text-white">
+            <h1 className="text-2xl font-semibold mb-2">Employee Statistics</h1>
+            <p className="text-slate-400">
+              Employee statistics page coming soon...
+            </p>
+          </div>
+        );
       case "attendance":
         return <AttendanceRecordPage />;
       case "dashboard":
@@ -22,6 +31,7 @@ const MainPage: React.FC = () => {
             <p className="text-slate-400">Dashboard page coming soon...</p>
           </div>
         );
+
       case "realtimeAttendance":
         return <RealtimeAttendancePage />;
       default:
