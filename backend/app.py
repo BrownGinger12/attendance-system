@@ -8,6 +8,7 @@ from datetime import datetime, date, time as dtime
 
 from handler.dtr_generator_handler import fill_dtr_document
 from handler.employee_handler import (
+    delete_employee,
     get_employee_by_id,
     get_employees_paginated,
     get_total_employee_pages,
@@ -97,6 +98,9 @@ def update_employee_api(user_id):
 @app.route("/employees/count", methods=["GET"])
 def employees_count():
     return get_employee_count()
+@app.route('/employee/<int:user_id>', methods=['DELETE'])
+def delete_employee_route(user_id):
+    return delete_employee(user_id)
 
 # ------------------------------
 # Attendance endpoints

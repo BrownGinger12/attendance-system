@@ -147,6 +147,7 @@ const EmployeePage: React.FC = () => {
 
   // Handle modal update callback
   const handleEmployeeUpdate = () => {
+    clearCache(); // Clear cache to force refresh
     fetchEmployees(currentPage);
   };
 
@@ -167,7 +168,7 @@ const EmployeePage: React.FC = () => {
           animation: fadeIn 0.3s ease-out;
         }
       `}</style>
-      <div className="w-full">
+      <div className="max-w-7xl">
         {/* Header */}
         <div className="mb-6 flex items-center justify-between">
           <div>

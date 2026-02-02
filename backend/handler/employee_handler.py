@@ -73,3 +73,13 @@ def get_employee_count():
 
     except Exception as e:
         return jsonify({"message": str(e)}), 500
+
+def delete_employee(user_id: int):
+    try:
+        result = Employee.delete(user_id)
+        return jsonify(result), result["statusCode"]
+
+    except ValidationError as e:
+        return jsonify({"message": str(e)}), 400
+    except Exception as e:
+        return jsonify({"message": str(e)}), 500

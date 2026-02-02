@@ -188,3 +188,26 @@ class Employee(BaseModel):
 
         except Exception as e:
             return {"statusCode": 500, "message": str(e)}
+        
+    @staticmethod
+    def delete(user_id: int):
+        try:
+            # 1️⃣ Check if employee exists
+            existing = Employee.get_by_id(user_id)
+            if existing["statusCode"] != 200:
+                return existing
+
+            # 2️⃣ Delete the employee
+            sql = "DELETE FROM [USERINFO] WHERE USERID = ?"
+            result = query(sql, [user_id])
+
+            if result["statusCode"] == 200:
+                return {
+                    "statusCode": 200,
+                    "message": f"Employee {user_id} deleted successfully"
+                }
+            
+            return result
+
+        except Exception as e:
+            return {"statusCode": 500, "message": str(e)}

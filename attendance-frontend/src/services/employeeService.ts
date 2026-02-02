@@ -132,7 +132,7 @@ export const employeeService = {
     limit: number = 10,
   ): Promise<EmployeePagesResponse> => {
     const response = await apiClient.get<EmployeePagesResponse>(
-      "/employees/pages",
+      "/employee/pages",
       {
         params: { limit },
       },
@@ -190,7 +190,7 @@ export const employeeService = {
     payload: any,
   ): Promise<EmployeeDetailResponse> => {
     const response = await apiClient.put<EmployeeDetailResponse>(
-      `/employee/${userId}`,
+      `/employe/${userId}`,
       payload,
     );
     return response.data;
@@ -210,6 +210,12 @@ export const employeeService = {
   // Export DTR
   exportDTR: async (payload: any): Promise<any> => {
     const response = await apiClient.post("/api/fill-dtr-json", payload);
+    return response.data;
+  },
+
+  // Delete employee
+  deleteEmployee: async (userId: number): Promise<any> => {
+    const response = await apiClient.delete(`/employee/${userId}`);
     return response.data;
   },
 };

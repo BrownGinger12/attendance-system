@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { X, Edit2, Save, User, Download } from "lucide-react";
+import { X, Edit2, Save, User, Download, Trash2 } from "lucide-react";
 import employeeService, { Department } from "../services/employeeService";
 
 interface EmployeeModalProps {
@@ -29,6 +29,8 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Edit form state
@@ -213,6 +215,22 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({
     return dept ? dept.DEPTNAME : `Dept ${deptId}`;
   };
 
+  const handleDeleteEmployee = async () => {
+    setDeleting(true);
+    setError(null);
+    try {
+      await employeeService.deleteEmployee(userId);
+      onUpdate?.();
+      onClose();
+    } catch (err) {
+      setError("Failed to delete employee");
+      console.error("Error deleting employee:", err);
+      setShowDeleteConfirm(false);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -329,23 +347,36 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({
 
           {employee && (
             <div className="flex items-center justify-between gap-3 p-6 border-t border-slate-800">
-              <button
-                onClick={handleExportDTR}
-                disabled={exporting || isEditing}
-                className="px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
-              >
-                {exporting ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Exporting...
-                  </>
-                ) : (
-                  <>
-                    <Download className="w-4 h-4" />
-                    Export DTR
-                  </>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleExportDTR}
+                  disabled={exporting || isEditing}
+                  className="px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
+                >
+                  {exporting ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Exporting...
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-4 h-4" />
+                      Export DTR
+                    </>
+                  )}
+                </button>
+
+                {!isEditing && (
+                  <button
+                    onClick={() => setShowDeleteConfirm(true)}
+                    disabled={deleting}
+                    className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Delete
+                  </button>
                 )}
-              </button>
+              </div>
 
               <div className="flex items-center gap-3">
                 {isEditing ? (
@@ -389,6 +420,63 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({
           )}
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 flex items-center justify-center z-[60] p-4">
+          <div
+            className="fixed inset-0 bg-black bg-opacity-75"
+            onClick={() => !deleting && setShowDeleteConfirm(false)}
+          />
+          <div className="bg-slate-900 border border-slate-800 rounded-lg w-full max-w-sm relative z-10 animate-fadeIn">
+            <div className="p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-3 bg-red-900/30 rounded-full">
+                  <Trash2 className="w-6 h-6 text-red-400" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-white">
+                    Delete Employee
+                  </h3>
+                  <p className="text-sm text-slate-400">
+                    This action cannot be undone
+                  </p>
+                </div>
+              </div>
+              <p className="text-slate-300 mb-6">
+                Are you sure you want to delete{" "}
+                <span className="font-semibold text-white">
+                  {employee?.Name}
+                </span>
+                ? All associated data will be permanently removed.
+              </p>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setShowDeleteConfirm(false)}
+                  disabled={deleting}
+                  className="flex-1 px-4 py-2 text-sm font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteEmployee}
+                  disabled={deleting}
+                  className="flex-1 px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {deleting ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Deleting...
+                    </>
+                  ) : (
+                    "Delete Employee"
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <style>{`
         @keyframes fadeIn {
