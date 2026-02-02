@@ -127,12 +127,27 @@ export const employeeService = {
     return response.data;
   },
 
+  // Search employees
+  searchEmployees: async (
+    query: string,
+    page: number = 1,
+    limit: number = 10,
+  ): Promise<EmployeesResponse> => {
+    const response = await apiClient.get<EmployeesResponse>(
+      "/employees/search",
+      {
+        params: { query, page, limit },
+      },
+    );
+    return response.data;
+  },
+
   // Get total pages info
   getEmployeePages: async (
     limit: number = 10,
   ): Promise<EmployeePagesResponse> => {
     const response = await apiClient.get<EmployeePagesResponse>(
-      "/employee/pages",
+      "/employees/pages",
       {
         params: { limit },
       },
@@ -190,7 +205,7 @@ export const employeeService = {
     payload: any,
   ): Promise<EmployeeDetailResponse> => {
     const response = await apiClient.put<EmployeeDetailResponse>(
-      `/employe/${userId}`,
+      `/employee/${userId}`,
       payload,
     );
     return response.data;
@@ -217,6 +232,12 @@ export const employeeService = {
   deleteEmployee: async (userId: number): Promise<any> => {
     const response = await apiClient.delete(`/employee/${userId}`);
     return response.data;
+  },
+
+  // Get total employee count
+  getTotalEmployeeCount: async (): Promise<number> => {
+    const response = await apiClient.get("/employees/count");
+    return response.data.total_employees;
   },
 };
 

@@ -211,3 +211,67 @@ class Employee(BaseModel):
 
         except Exception as e:
             return {"statusCode": 500, "message": str(e)}
+    
+    @staticmethod
+    def search(query: str, page: int = 1, limit: int = 10):
+        try:
+            page = max(page, 1)
+            limit = min(max(limit, 1), 100)
+            
+            # Search by name or badge number
+            search_pattern = f"%{query}%"
+            
+            # Count total matching employees
+            count_sql = """
+            SELECT COUNT(*) AS total 
+            FROM [USERINFO]
+            WHERE [Name] LIKE ? OR [Badgenumber] LIKE ?
+            """
+            count_result = fetch_query(count_sql, [search_pattern, search_pattern])
+            total_employees = count_result[0]["total"] if count_result else 0
+            total_pages = math.ceil(total_employees / limit)
+            
+            offset = (page - 1) * limit
+            
+            # Get paginated search results
+            if offset == 0:
+                sql = f"""
+                SELECT TOP {limit} *
+                FROM [USERINFO]
+                WHERE [Name] LIKE ? OR [Badgenumber] LIKE ?
+                ORDER BY [USERID]
+                """
+                rows = fetch_query(sql, [search_pattern, search_pattern])
+            else:
+                sql = f"""
+                SELECT TOP {limit} *
+                FROM [USERINFO]
+                WHERE ([Name] LIKE ? OR [Badgenumber] LIKE ?)
+                AND [USERID] NOT IN (
+                    SELECT TOP {offset} [USERID]
+                    FROM [USERINFO]
+                    WHERE [Name] LIKE ? OR [Badgenumber] LIKE ?
+                    ORDER BY [USERID]
+                )
+                ORDER BY [USERID]
+                """
+                rows = fetch_query(sql, [search_pattern, search_pattern, search_pattern, search_pattern])
+            
+            # Convert bytes to Base64
+            for row in rows:
+                for k, v in row.items():
+                    if isinstance(v, bytes):
+                        row[k] = base64.b64encode(v).decode("utf-8")
+            
+            return {
+                "statusCode": 200,
+                "page": page,
+                "limit": limit,
+                "total_employees": total_employees,
+                "total_pages": total_pages,
+                "count": len(rows),
+                "data": rows
+            }
+            
+        except Exception as e:
+            return {"statusCode": 500, "message": str(e)}

@@ -12,27 +12,14 @@ import {
 } from "lucide-react";
 import { io } from "socket.io-client";
 import employeeService from "../services/employeeService";
-
-interface AttendanceLog {
-  USERID: number;
-  CHECKTIME: string;
-  CHECKTYPE: string;
-  VERIFYCODE?: number;
-  SENSORID?: string;
-  Memoinfo?: string;
-  WorkCode?: string | null;
-  sn?: string | null;
-  UserExtFmt?: number | null;
-  employeeName?: string;
-}
-
-interface EmployeeAttendance {
-  USERID: number;
-  employeeName: string;
-  checkIn?: AttendanceLog;
-  checkOut?: AttendanceLog;
-  isLate: boolean;
-}
+import {
+  AttendanceLog,
+  EmployeeAttendance,
+  processAttendanceLogs,
+  calculateStatistics,
+  formatTimeAMPM,
+  formatDate,
+} from "../utils/attendanceUtils";
 
 const ATTENDANCE_NS = "/attendance";
 
@@ -55,12 +42,10 @@ const RealtimeAttendancePage: React.FC = () => {
   );
 
   useEffect(() => {
-    // Fetch total employees count
     const fetchTotalEmployees = async () => {
       try {
-        const response = await fetch("http://127.0.0.1:5000/employees/count");
-        const data = await response.json();
-        setTotalEmployees(data.total_employees);
+        const total = await employeeService.getTotalEmployeeCount();
+        setTotalEmployees(total);
       } catch (err) {
         console.error("Error fetching total employees:", err);
       }
@@ -94,7 +79,7 @@ const RealtimeAttendancePage: React.FC = () => {
         })),
       );
       setLogs(logsWithNames);
-      processAttendanceLogs(logsWithNames);
+      updateAttendanceData(logsWithNames);
     });
 
     socket.on("new_attendance", async (record) => {
@@ -106,7 +91,7 @@ const RealtimeAttendancePage: React.FC = () => {
 
       setLogs((prev) => {
         const updated = [recordWithName, ...prev];
-        processAttendanceLogs(updated);
+        updateAttendanceData(updated);
         return updated;
       });
     });
@@ -138,121 +123,30 @@ const RealtimeAttendancePage: React.FC = () => {
     }
   };
 
-  const isLateCheckIn = (checkTime: string): boolean => {
-    const date = new Date(checkTime);
-    const hour = date.getHours();
-    const minute = date.getMinutes();
-
-    // Late if after 8:10 AM or after 1:10 PM
-    if ((hour === 8 && minute > 10) || (hour > 8 && hour < 13)) {
-      return true;
-    }
-    if ((hour === 13 && minute > 10) || hour > 13) {
-      return true;
-    }
-    return false;
-  };
-
-  const processAttendanceLogs = (allLogs: AttendanceLog[]) => {
-    const attendanceMap = new Map<number, EmployeeAttendance>();
-
-    // Get today's logs only
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const todayLogs = allLogs.filter((log) => {
-      const logDate = new Date(log.CHECKTIME);
-      logDate.setHours(0, 0, 0, 0);
-      return logDate.getTime() === today.getTime();
-    });
-
-    todayLogs.forEach((log) => {
-      const userId = log.USERID;
-
-      if (!attendanceMap.has(userId)) {
-        attendanceMap.set(userId, {
-          USERID: userId,
-          employeeName: log.employeeName || "Unknown",
-          isLate: false,
-        });
-      }
-
-      const employee = attendanceMap.get(userId)!;
-
-      if (log.CHECKTYPE === "I") {
-        // Keep earliest check-in
-        if (
-          !employee.checkIn ||
-          new Date(log.CHECKTIME) < new Date(employee.checkIn.CHECKTIME)
-        ) {
-          employee.checkIn = log;
-          employee.isLate = isLateCheckIn(log.CHECKTIME);
-        }
-      } else if (log.CHECKTYPE === "O") {
-        // Keep earliest check-out
-        if (
-          !employee.checkOut ||
-          new Date(log.CHECKTIME) < new Date(employee.checkOut.CHECKTIME)
-        ) {
-          employee.checkOut = log;
-        }
-      }
-    });
-
+  const updateAttendanceData = (allLogs: AttendanceLog[]) => {
+    const attendanceMap = processAttendanceLogs(allLogs);
     setEmployeeAttendance(attendanceMap);
 
-    // Calculate statistics
-    let late = 0;
-    let onTime = 0;
-
-    attendanceMap.forEach((emp) => {
-      if (emp.checkIn) {
-        if (emp.isLate) {
-          late++;
-        } else {
-          onTime++;
-        }
-      }
-    });
-
+    const { late, onTime } = calculateStatistics(attendanceMap);
     setLateCount(late);
     setOnTimeCount(onTime);
-  };
-
-  const formatTimeAMPM = (dateString: string): string => {
-    const date = new Date(dateString);
-    const hours = date.getHours();
-    const minutes = date.getMinutes();
-    const ampm = hours >= 12 ? "PM" : "AM";
-    const displayHours = hours % 12 || 12;
-    return `${displayHours}:${minutes.toString().padStart(2, "0")} ${ampm}`;
-  };
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
   };
 
   const notClockedIn = totalEmployees - (onTimeCount + lateCount);
   const attendanceArray = Array.from(employeeAttendance.values());
 
-  // Filter and search
   const filteredAttendance = attendanceArray.filter((employee) => {
-    // Search filter
     const matchesSearch =
       employee.employeeName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       employee.USERID.toString().includes(searchQuery);
 
-    // Status filter
     let matchesFilter = true;
     if (filterStatus === "late") {
       matchesFilter = employee.isLate;
     } else if (filterStatus === "ontime") {
-      matchesFilter = !employee.isLate && employee.checkIn !== undefined;
+      matchesFilter =
+        !employee.isLate &&
+        (employee.amCheckIn !== undefined || employee.pmCheckIn !== undefined);
     }
 
     return matchesSearch && matchesFilter;
@@ -261,7 +155,6 @@ const RealtimeAttendancePage: React.FC = () => {
   return (
     <div className="w-full h-full bg-slate-950 p-6">
       <div className="w-full">
-        {/* Header */}
         <div className="mb-6 flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-semibold text-white mb-2">
@@ -270,7 +163,6 @@ const RealtimeAttendancePage: React.FC = () => {
             <p className="text-slate-400 text-sm">Live attendance monitoring</p>
           </div>
 
-          {/* Connection Status */}
           <div className="flex items-center gap-2">
             {isConnected ? (
               <>
@@ -291,7 +183,6 @@ const RealtimeAttendancePage: React.FC = () => {
           </div>
         </div>
 
-        {/* Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
           <div className="bg-slate-900 border border-slate-800 rounded-lg p-4">
             <div className="flex items-center gap-3">
@@ -340,7 +231,6 @@ const RealtimeAttendancePage: React.FC = () => {
           </div>
         </div>
 
-        {/* Live Feed */}
         <div className="bg-slate-900 border border-slate-800 rounded-lg overflow-hidden">
           <div className="p-4 border-b border-slate-800">
             <div className="flex items-center justify-between mb-4">
@@ -354,9 +244,7 @@ const RealtimeAttendancePage: React.FC = () => {
               </span>
             </div>
 
-            {/* Search and Filter */}
             <div className="flex flex-col sm:flex-row gap-3">
-              {/* Search Bar */}
               <div className="flex-1 relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-500" />
                 <input
@@ -368,7 +256,6 @@ const RealtimeAttendancePage: React.FC = () => {
                 />
               </div>
 
-              {/* Filter Dropdown */}
               <div className="relative">
                 <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" />
                 <select
@@ -386,7 +273,6 @@ const RealtimeAttendancePage: React.FC = () => {
             </div>
           </div>
 
-          {/* Table */}
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-slate-800/50 border-b border-slate-700">
@@ -435,35 +321,24 @@ const RealtimeAttendancePage: React.FC = () => {
                   </tr>
                 ) : (
                   filteredAttendance.map((employee) => {
-                    const checkInTime = employee.checkIn
-                      ? new Date(employee.checkIn.CHECKTIME)
-                      : null;
-                    const checkOutTime = employee.checkOut
-                      ? new Date(employee.checkOut.CHECKTIME)
-                      : null;
-                    const checkInHour = checkInTime
-                      ? checkInTime.getHours()
-                      : null;
-                    const checkOutHour = checkOutTime
-                      ? checkOutTime.getHours()
-                      : null;
-
-                    // Determine AM/PM slots
-                    const amIn =
-                      checkInHour !== null && checkInHour < 12
-                        ? formatTimeAMPM(employee.checkIn!.CHECKTIME)
-                        : "-";
-                    const amOut =
-                      checkOutHour !== null && checkOutHour <= 12
-                        ? formatTimeAMPM(employee.checkOut!.CHECKTIME)
-                        : "-";
-                    const pmIn =
-                      checkInHour !== null && checkInHour >= 12
-                        ? formatTimeAMPM(employee.checkIn!.CHECKTIME)
-                        : "-";
-                    const pmOut =
-                      checkOutHour !== null && checkOutHour > 12
-                        ? formatTimeAMPM(employee.checkOut!.CHECKTIME)
+                    const amIn = employee.amCheckIn
+                      ? formatTimeAMPM(employee.amCheckIn.CHECKTIME)
+                      : "-";
+                    const amOut = employee.amCheckOut
+                      ? formatTimeAMPM(employee.amCheckOut.CHECKTIME)
+                      : "-";
+                    const pmIn = employee.pmCheckIn
+                      ? formatTimeAMPM(employee.pmCheckIn.CHECKTIME)
+                      : "-";
+                    const pmOut = employee.pmCheckOut
+                      ? formatTimeAMPM(employee.pmCheckOut.CHECKTIME)
+                      : "-";
+                    const date =
+                      employee.amCheckIn || employee.pmCheckIn
+                        ? formatDate(
+                            (employee.amCheckIn || employee.pmCheckIn)!
+                              .CHECKTIME,
+                          )
                         : "-";
 
                     return (
@@ -494,9 +369,7 @@ const RealtimeAttendancePage: React.FC = () => {
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">
-                          {employee.checkIn
-                            ? formatDate(employee.checkIn.CHECKTIME)
-                            : "-"}
+                          {date}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-center text-sm text-slate-300">
                           {amIn}

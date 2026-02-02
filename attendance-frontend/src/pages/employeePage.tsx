@@ -48,8 +48,30 @@ const EmployeePage: React.FC = () => {
   };
 
   // Fetch employees with caching
-  const fetchEmployees = async (page: number) => {
-    // Check cache first
+  const fetchEmployees = async (page: number, searchTerm: string = "") => {
+    // Don't use cache for search results
+    if (searchTerm) {
+      setLoading(true);
+      setError(null);
+      try {
+        const response = await employeeService.searchEmployees(
+          searchTerm,
+          page,
+          itemsPerPage,
+        );
+        setEmployees(response.data);
+        setTotalPages(response.total_pages);
+        setTotalEmployees(response.total_employees);
+      } catch (err) {
+        setError("Failed to search employees. Please try again.");
+        console.error("Error searching employees:", err);
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    // Check cache first for normal pagination
     const cachedData = cache.current[page];
     if (cachedData && isCacheValid(cachedData.timestamp)) {
       setEmployees(cachedData.data);
@@ -82,7 +104,7 @@ const EmployeePage: React.FC = () => {
   // Clear cache (can be called when data needs to be refreshed)
   const clearCache = () => {
     cache.current = {};
-    fetchEmployees(currentPage);
+    fetchEmployees(currentPage, searchQuery);
   };
 
   // Initial load
@@ -91,8 +113,8 @@ const EmployeePage: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    fetchEmployees(currentPage);
-  }, [currentPage]);
+    fetchEmployees(currentPage, searchQuery);
+  }, [currentPage, searchQuery]);
 
   // Add key to force re-render animation on page change
   const [animationKey, setAnimationKey] = useState(0);
@@ -107,18 +129,12 @@ const EmployeePage: React.FC = () => {
     return department ? department.DEPTNAME : `Dept ${deptId}`;
   };
 
-  // Filter employees based on search query (client-side)
-  const filteredEmployees = employees.filter(
-    (employee) =>
-      employee.Name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      employee.Badgenumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      getDepartmentName(employee.DEFAULTDEPTID)
-        .toLowerCase()
-        .includes(searchQuery.toLowerCase()),
-  );
+  // No client-side filtering needed anymore - handled by API
+  const filteredEmployees = employees;
 
   const handleSearchChange = (value: string) => {
     setSearchQuery(value);
+    setCurrentPage(1); // Reset to page 1 when searching
   };
 
   const handlePreviousPage = () => {
@@ -148,7 +164,7 @@ const EmployeePage: React.FC = () => {
   // Handle modal update callback
   const handleEmployeeUpdate = () => {
     clearCache(); // Clear cache to force refresh
-    fetchEmployees(currentPage);
+    fetchEmployees(currentPage, searchQuery);
   };
 
   return (
@@ -168,7 +184,7 @@ const EmployeePage: React.FC = () => {
           animation: fadeIn 0.3s ease-out;
         }
       `}</style>
-      <div className="max-w-7xl">
+      <div className="w-full">
         {/* Header */}
         <div className="mb-6 flex items-center justify-between">
           <div>
@@ -193,7 +209,7 @@ const EmployeePage: React.FC = () => {
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
             <input
               type="text"
-              placeholder="Search by name, badge number, or department..."
+              placeholder="Search by name or badge number..."
               value={searchQuery}
               onChange={(e) => handleSearchChange(e.target.value)}
               className="w-full pl-10 pr-4 py-3 bg-slate-900 border border-slate-800 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-slate-700 transition-colors"

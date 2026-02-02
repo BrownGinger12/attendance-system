@@ -83,3 +83,22 @@ def delete_employee(user_id: int):
         return jsonify({"message": str(e)}), 400
     except Exception as e:
         return jsonify({"message": str(e)}), 500
+
+def search_employees():
+    try:
+        query = request.args.get("query", default="", type=str)
+        page = request.args.get("page", default=1, type=int)
+        limit = request.args.get("limit", default=10, type=int)
+        
+        if not query or query.strip() == "":
+            return jsonify({"message": "Query parameter is required"}), 400
+        
+        response = Employee.search(query.strip(), page=page, limit=limit)
+        
+        if response["statusCode"] != 200:
+            return jsonify({"message": response.get("message", "Error searching employees")}), response["statusCode"]
+        
+        return jsonify(response), 200
+        
+    except Exception as e:
+        return jsonify({"message": str(e)}), 500

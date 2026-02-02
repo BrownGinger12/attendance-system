@@ -12,6 +12,7 @@ from handler.employee_handler import (
     get_employee_by_id,
     get_employees_paginated,
     get_total_employee_pages,
+    search_employees,
     update_employee,
     get_employee_count
 )
@@ -101,6 +102,9 @@ def employees_count():
 @app.route('/employee/<int:user_id>', methods=['DELETE'])
 def delete_employee_route(user_id):
     return delete_employee(user_id)
+@app.route('/employees/search', methods=['GET'])
+def search_employees_route():
+    return search_employees()
 
 # ------------------------------
 # Attendance endpoints
