@@ -72,38 +72,34 @@ class Employee(BaseModel):
     def get_paginated(page: int = 1, limit: int = 10):
         try:
             page = max(page, 1)
-            limit = min(max(limit, 1), 100)  # safety cap
+            limit = min(max(limit, 1), 100)
 
             total_employees = Employee.get_total()
             total_pages = math.ceil(total_employees / limit)
             offset = (page - 1) * limit
 
-            # ---------------------
-            # Page 1 -> simple TOP query
-            # ---------------------
             if offset == 0:
                 sql = f"""
-                SELECT TOP {limit} *
-                FROM [USERINFO]
-                ORDER BY [USERID]
+                SELECT u.*, 
+                    (SELECT COUNT(*) FROM [TEMPLATE] t WHERE t.USERID = u.USERID) as FingerprintCount
+                FROM [USERINFO] u
+                ORDER BY u.[USERID]
                 """
+                rows = fetch_query(sql)[:limit]
             else:
                 sql = f"""
-                SELECT TOP {limit} *
-                FROM [USERINFO]
-                WHERE [USERID] NOT IN (
+                SELECT TOP {limit} u.*,
+                    (SELECT COUNT(*) FROM [TEMPLATE] t WHERE t.USERID = u.USERID) as FingerprintCount
+                FROM [USERINFO] u
+                WHERE u.[USERID] NOT IN (
                     SELECT TOP {offset} [USERID]
                     FROM [USERINFO]
                     ORDER BY [USERID]
                 )
-                ORDER BY [USERID]
-                """ 
+                ORDER BY u.[USERID]
+                """
+                rows = fetch_query(sql)
 
-            rows = fetch_query(sql)
-
-            # ---------------------
-            # Convert bytes (PHOTO) to Base64 for JSON
-            # ---------------------
             for row in rows:
                 for k, v in row.items():
                     if isinstance(v, bytes):
@@ -121,6 +117,7 @@ class Employee(BaseModel):
 
         except Exception as e:
             return {"statusCode": 500, "message": str(e)}
+
         
     @staticmethod
     def get_by_id(user_id: int):
@@ -212,16 +209,15 @@ class Employee(BaseModel):
         except Exception as e:
             return {"statusCode": 500, "message": str(e)}
     
+    # Also update search method similarly
     @staticmethod
     def search(query: str, page: int = 1, limit: int = 10):
         try:
             page = max(page, 1)
             limit = min(max(limit, 1), 100)
             
-            # Search by name or badge number
             search_pattern = f"%{query}%"
             
-            # Count total matching employees
             count_sql = """
             SELECT COUNT(*) AS total 
             FROM [USERINFO]
@@ -233,31 +229,31 @@ class Employee(BaseModel):
             
             offset = (page - 1) * limit
             
-            # Get paginated search results
             if offset == 0:
                 sql = f"""
-                SELECT TOP {limit} *
-                FROM [USERINFO]
-                WHERE [Name] LIKE ? OR [Badgenumber] LIKE ?
-                ORDER BY [USERID]
+                SELECT TOP {limit} u.*,
+                    (SELECT COUNT(*) FROM [TEMPLATE] t WHERE t.USERID = u.USERID) as FingerprintCount
+                FROM [USERINFO] u
+                WHERE u.[Name] LIKE ? OR u.[Badgenumber] LIKE ?
+                ORDER BY u.[USERID]
                 """
                 rows = fetch_query(sql, [search_pattern, search_pattern])
             else:
                 sql = f"""
-                SELECT TOP {limit} *
-                FROM [USERINFO]
-                WHERE ([Name] LIKE ? OR [Badgenumber] LIKE ?)
-                AND [USERID] NOT IN (
+                SELECT TOP {limit} u.*,
+                    (SELECT COUNT(*) FROM [TEMPLATE] t WHERE t.USERID = u.USERID) as FingerprintCount
+                FROM [USERINFO] u
+                WHERE (u.[Name] LIKE ? OR u.[Badgenumber] LIKE ?)
+                AND u.[USERID] NOT IN (
                     SELECT TOP {offset} [USERID]
                     FROM [USERINFO]
                     WHERE [Name] LIKE ? OR [Badgenumber] LIKE ?
                     ORDER BY [USERID]
                 )
-                ORDER BY [USERID]
+                ORDER BY u.[USERID]
                 """
                 rows = fetch_query(sql, [search_pattern, search_pattern, search_pattern, search_pattern])
             
-            # Convert bytes to Base64
             for row in rows:
                 for k, v in row.items():
                     if isinstance(v, bytes):
@@ -275,3 +271,45 @@ class Employee(BaseModel):
             
         except Exception as e:
             return {"statusCode": 500, "message": str(e)}
+
+        
+
+    @staticmethod
+    def get_fingerprints_by_user(user_id: int):
+        try:
+            sql = "SELECT * FROM [TEMPLATE] WHERE USERID = ?"
+            rows = fetch_query(sql, [user_id])
+            
+            return {
+                "statusCode": 200,
+                "count": len(rows),
+                "data": rows
+            }
+        except Exception as e:
+            return {"statusCode": 500, "message": str(e)}
+
+    @staticmethod
+    def export_all_to_excel():
+        try:
+            import pandas as pd
+            from io import BytesIO
+            
+            sql = """
+            SELECT u.USERID, u.Badgenumber, u.Name, u.DEFAULTDEPTID,
+                (SELECT COUNT(*) FROM [TEMPLATE] t WHERE t.USERID = u.USERID) as FingerprintCount
+            FROM [USERINFO] u
+            ORDER BY u.USERID
+            """
+            rows = fetch_query(sql)
+            
+            df = pd.DataFrame(rows)
+            
+            output = BytesIO()
+            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                df.to_excel(writer, index=False, sheet_name='Employees')
+            
+            output.seek(0)
+            return output
+            
+        except Exception as e:
+            return None

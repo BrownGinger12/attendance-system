@@ -1,4 +1,4 @@
-from flask import request, jsonify
+from flask import request, jsonify,send_file
 from model.employee import Employee
 from pydantic import ValidationError
 
@@ -99,6 +99,30 @@ def search_employees():
             return jsonify({"message": response.get("message", "Error searching employees")}), response["statusCode"]
         
         return jsonify(response), 200
+        
+    except Exception as e:
+        return jsonify({"message": str(e)}), 500
+
+def get_user_fingerprints(user_id: int):
+    try:
+        result = Employee.get_fingerprints_by_user(user_id)
+        return jsonify(result), result["statusCode"]
+    except Exception as e:
+        return jsonify({"message": str(e)}), 500
+    
+def export_employees_excel():
+    try:
+        excel_file = Employee.export_all_to_excel()
+        
+        if not excel_file:
+            return jsonify({"message": "Failed to generate Excel file"}), 500
+        
+        return send_file(
+            excel_file,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name='employees.xlsx'
+        )
         
     except Exception as e:
         return jsonify({"message": str(e)}), 500

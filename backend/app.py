@@ -9,9 +9,11 @@ from datetime import datetime, date, time as dtime
 from handler.dtr_generator_handler import fill_dtr_document
 from handler.employee_handler import (
     delete_employee,
+    export_employees_excel,
     get_employee_by_id,
     get_employees_paginated,
     get_total_employee_pages,
+    get_user_fingerprints,
     search_employees,
     update_employee,
     get_employee_count
@@ -105,6 +107,13 @@ def delete_employee_route(user_id):
 @app.route('/employees/search', methods=['GET'])
 def search_employees_route():
     return search_employees()
+@app.route('/employees/<int:user_id>/fingerprints', methods=['GET'])
+def get_fingerprints_route(user_id):
+    return get_user_fingerprints(user_id)
+@app.route('/employees/export/excel', methods=['GET'])
+def export_excel_route():
+    return export_employees_excel()
+
 
 # ------------------------------
 # Attendance endpoints

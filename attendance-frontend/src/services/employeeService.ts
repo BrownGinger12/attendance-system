@@ -5,6 +5,7 @@ export interface Employee {
   Name: string;
   Badgenumber: string;
   DEFAULTDEPTID: number;
+  FingerprintCount?: number;
   // Add other fields as needed
 }
 
@@ -194,7 +195,7 @@ export const employeeService = {
   // Get employee by ID
   getEmployeeById: async (userId: number): Promise<EmployeeDetailResponse> => {
     const response = await apiClient.get<EmployeeDetailResponse>(
-      `/employee/${userId}`,
+      `/employees/${userId}`,
     );
     return response.data;
   },
@@ -238,6 +239,20 @@ export const employeeService = {
   getTotalEmployeeCount: async (): Promise<number> => {
     const response = await apiClient.get("/employees/count");
     return response.data.total_employees;
+  },
+
+  // Get user fingerprints
+  getUserFingerprints: async (userId: number): Promise<any> => {
+    const response = await apiClient.get(`/employees/${userId}/fingerprints`);
+    return response.data;
+  },
+
+  // Export employees to Excel
+  exportToExcel: async (): Promise<Blob> => {
+    const response = await apiClient.get("/employees/export/excel", {
+      responseType: "blob",
+    });
+    return response.data;
   },
 };
 

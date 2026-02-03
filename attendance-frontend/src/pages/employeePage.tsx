@@ -1,5 +1,11 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Search, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import {
+  Search,
+  ChevronLeft,
+  ChevronRight,
+  Loader2,
+  FileDown,
+} from "lucide-react";
 import employeeService, {
   Employee,
   Department,
@@ -21,6 +27,7 @@ const EmployeePage: React.FC = () => {
   const [totalPages, setTotalPages] = useState(0);
   const [totalEmployees, setTotalEmployees] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const itemsPerPage = 10;
 
@@ -167,6 +174,27 @@ const EmployeePage: React.FC = () => {
     fetchEmployees(currentPage, searchQuery);
   };
 
+  // Handle Excel export
+  const handleExportExcel = async () => {
+    setExporting(true);
+    try {
+      const blob = await employeeService.exportToExcel();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `employees_${new Date().toISOString().split("T")[0]}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Error exporting to Excel:", err);
+      setError("Failed to export to Excel");
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div className="w-full h-full bg-slate-950 p-6">
       <style>{`
@@ -195,12 +223,31 @@ const EmployeePage: React.FC = () => {
               Manage and view employee information
             </p>
           </div>
-          <button
-            onClick={clearCache}
-            className="px-4 py-2 text-sm bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg transition-colors"
-          >
-            Refresh Data
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleExportExcel}
+              disabled={exporting}
+              className="px-4 py-2 text-sm bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
+            >
+              {exporting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Exporting...
+                </>
+              ) : (
+                <>
+                  <FileDown className="w-4 h-4" />
+                  Export Excel
+                </>
+              )}
+            </button>
+            <button
+              onClick={clearCache}
+              className="px-4 py-2 text-sm bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg transition-colors"
+            >
+              Refresh Data
+            </button>
+          </div>
         </div>
 
         {/* Search Bar */}
@@ -242,12 +289,15 @@ const EmployeePage: React.FC = () => {
                   <th className="px-6 py-4 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                     Department
                   </th>
+                  <th className="px-6 py-4 text-center text-xs font-medium text-slate-400 uppercase tracking-wider">
+                    Fingerprints
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
                 {loading ? (
                   <tr>
-                    <td colSpan={3} className="px-6 py-12 text-center">
+                    <td colSpan={4} className="px-6 py-12 text-center">
                       <Loader2 className="w-8 h-8 text-slate-400 animate-spin mx-auto" />
                     </td>
                   </tr>
@@ -274,12 +324,23 @@ const EmployeePage: React.FC = () => {
                           </span>
                         </div>
                       </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-center text-sm">
+                        <span
+                          className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
+                            (employee.FingerprintCount || 0) > 0
+                              ? "bg-blue-900/30 text-blue-400 border border-blue-800"
+                              : "bg-slate-800 text-slate-500 border border-slate-700"
+                          }`}
+                        >
+                          {employee.FingerprintCount || 0}
+                        </span>
+                      </td>
                     </tr>
                   ))
                 ) : (
                   <tr>
                     <td
-                      colSpan={3}
+                      colSpan={4}
                       className="px-6 py-8 text-center text-slate-500"
                     >
                       No employees found
