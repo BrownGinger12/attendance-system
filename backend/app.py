@@ -9,7 +9,7 @@ from datetime import datetime, date, time as dtime
 from handler.dtr_generator_handler import fill_dtr_document
 from handler.employee_handler import (
     delete_employee,
-    export_employees_excel,
+    export_employees_to_excel,
     get_employee_by_id,
     get_employees_paginated,
     get_total_employee_pages,
@@ -112,8 +112,7 @@ def get_fingerprints_route(user_id):
     return get_user_fingerprints(user_id)
 @app.route('/employees/export/excel', methods=['GET'])
 def export_excel_route():
-    return export_employees_excel()
-
+    return export_employees_to_excel()
 
 # ------------------------------
 # Attendance endpoints

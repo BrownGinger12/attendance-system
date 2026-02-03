@@ -110,19 +110,29 @@ def get_user_fingerprints(user_id: int):
     except Exception as e:
         return jsonify({"message": str(e)}), 500
     
-def export_employees_excel():
+def export_employees_to_excel():
+    """
+    Export all employees to Excel file
+    """
     try:
-        excel_file = Employee.export_all_to_excel()
+        from datetime import datetime
         
-        if not excel_file:
-            return jsonify({"message": "Failed to generate Excel file"}), 500
+        excel_buffer = Employee.export_to_excel()
+        
+        if not excel_buffer:
+            return jsonify({'error': 'Failed to generate Excel file or no employees found'}), 404
+        
+        # Generate filename with current date
+        current_date = datetime.now().strftime('%Y-%m-%d')
+        output_filename = f"employees_{current_date}.xlsx"
         
         return send_file(
-            excel_file,
+            excel_buffer,
             mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             as_attachment=True,
-            download_name='employees.xlsx'
+            download_name=output_filename
         )
         
     except Exception as e:
-        return jsonify({"message": str(e)}), 500
+        print(f"Export handler error: {e}")
+        return jsonify({'error': str(e)}), 500

@@ -2,6 +2,8 @@ from pydantic import BaseModel
 from typing import Optional
 import base64 
 import math
+from io import BytesIO
+import pandas as pd
 from gateway.microsoft_db_gateway import fetch_query, query
 
 class Employee(BaseModel):
@@ -289,11 +291,10 @@ class Employee(BaseModel):
             return {"statusCode": 500, "message": str(e)}
 
     @staticmethod
-    def export_all_to_excel():
+    def export_to_excel():
         try:
-            import pandas as pd
-            from io import BytesIO
             
+            # Get all employees with fingerprint count
             sql = """
             SELECT u.USERID, u.Badgenumber, u.Name, u.DEFAULTDEPTID,
                 (SELECT COUNT(*) FROM [TEMPLATE] t WHERE t.USERID = u.USERID) as FingerprintCount
@@ -302,14 +303,24 @@ class Employee(BaseModel):
             """
             rows = fetch_query(sql)
             
+            if not rows:
+                return None
+            
+            # Create DataFrame
             df = pd.DataFrame(rows)
             
-            output = BytesIO()
-            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            # Rename columns for better readability
+            df.columns = ['Employee ID', 'Badge Number', 'Name', 'Department ID', 'Fingerprints']
+            
+            # Create Excel file in memory
+            excel_buffer = BytesIO()
+            with pd.ExcelWriter(excel_buffer, engine='openpyxl') as writer:
                 df.to_excel(writer, index=False, sheet_name='Employees')
             
-            output.seek(0)
-            return output
+            excel_buffer.seek(0)
+            
+            return excel_buffer
             
         except Exception as e:
+            print(f"Export error: {e}")
             return None
