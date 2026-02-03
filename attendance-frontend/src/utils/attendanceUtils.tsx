@@ -72,7 +72,11 @@ export const processAttendanceLogs = (
     const userId = log.USERID;
     const logDate = new Date(log.CHECKTIME);
     const hour = logDate.getHours();
-    const isAM = hour < 12;
+    const minutes = logDate.getMinutes();
+
+    // AM period: before 12:30 PM (up to 12:29 PM)
+    // PM period: 12:30 PM and after
+    const isAM = hour < 12 || (hour === 12 && minutes < 30);
 
     if (!attendanceMap.has(userId)) {
       attendanceMap.set(userId, {
