@@ -67,6 +67,7 @@ const AttendanceRecordPage: React.FC = () => {
 
       const time = timeMatch[0];
       const hour = parseInt(time.split(":")[0]);
+      const minute = parseInt(time.split(":")[1]);
 
       // Parse date for grouping key
       const date = new Date(record.CHECKTIME);
@@ -82,8 +83,8 @@ const AttendanceRecordPage: React.FC = () => {
         };
       }
 
-      // Determine if AM (before 12:00) or PM (12:00 and after)
-      const isPM = hour >= 12;
+      // Determine if AM (before 12:30 PM) or PM (12:30 PM and after)
+      const isPM = hour > 12 || (hour === 12 && minute >= 30);
 
       if (record.CHECKTYPE === "I") {
         if (isPM) {

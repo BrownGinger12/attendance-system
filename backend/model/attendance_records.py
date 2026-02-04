@@ -82,3 +82,22 @@ class AttendanceRecord(BaseModel):
             return {"statusCode": 200, "count": len(rows), "data": rows} if rows else {"statusCode": 404, "message": f"No attendance found for USERID {user_id}"}
         except Exception as e:
             return {"statusCode": 500, "message": str(e)}
+        
+    @staticmethod
+    def get_after(after_time: datetime):
+        """
+        Get all attendance records of today after the given datetime.
+        """
+        try:
+            today_str = datetime.now().strftime("%Y-%m-%d")
+            sql = """
+            SELECT *
+            FROM [CHECKINOUT]
+            WHERE FORMAT(CHECKTIME, 'yyyy-MM-dd') = ? AND CHECKTIME > ?
+            ORDER BY CHECKTIME ASC
+            """
+            rows = fetch_query(sql, [today_str, after_time])
+            return rows or []
+        except Exception as e:
+            print("Attendance watcher error:", e)
+            return []

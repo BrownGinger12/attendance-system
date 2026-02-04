@@ -5,6 +5,7 @@ export interface Employee {
   Name: string;
   Badgenumber: string;
   DEFAULTDEPTID: number;
+  FingerprintCount?: number;
   // Add other fields as needed
 }
 
@@ -127,6 +128,21 @@ export const employeeService = {
     return response.data;
   },
 
+  // Search employees
+  searchEmployees: async (
+    query: string,
+    page: number = 1,
+    limit: number = 10,
+  ): Promise<EmployeesResponse> => {
+    const response = await apiClient.get<EmployeesResponse>(
+      "/employees/search",
+      {
+        params: { query, page, limit },
+      },
+    );
+    return response.data;
+  },
+
   // Get total pages info
   getEmployeePages: async (
     limit: number = 10,
@@ -179,7 +195,7 @@ export const employeeService = {
   // Get employee by ID
   getEmployeeById: async (userId: number): Promise<EmployeeDetailResponse> => {
     const response = await apiClient.get<EmployeeDetailResponse>(
-      `/employee/${userId}`,
+      `/employees/${userId}`,
     );
     return response.data;
   },
@@ -193,6 +209,49 @@ export const employeeService = {
       `/employee/${userId}`,
       payload,
     );
+    return response.data;
+  },
+
+  // Get employee attendance by month
+  getEmployeeAttendance: async (
+    userId: number,
+    month: string,
+  ): Promise<any> => {
+    const response = await apiClient.get(`/attendance/employee`, {
+      params: { user_id: userId, month },
+    });
+    return response.data;
+  },
+
+  // Export DTR
+  exportDTR: async (payload: any): Promise<any> => {
+    const response = await apiClient.post("/api/fill-dtr-json", payload);
+    return response.data;
+  },
+
+  // Delete employee
+  deleteEmployee: async (userId: number): Promise<any> => {
+    const response = await apiClient.delete(`/employee/${userId}`);
+    return response.data;
+  },
+
+  // Get total employee count
+  getTotalEmployeeCount: async (): Promise<number> => {
+    const response = await apiClient.get("/employees/count");
+    return response.data.total_employees;
+  },
+
+  // Get user fingerprints
+  getUserFingerprints: async (userId: number): Promise<any> => {
+    const response = await apiClient.get(`/employees/${userId}/fingerprints`);
+    return response.data;
+  },
+
+  // Export employees to Excel
+  exportToExcel: async (): Promise<Blob> => {
+    const response = await apiClient.get("/employees/export/excel", {
+      responseType: "blob",
+    });
     return response.data;
   },
 };
