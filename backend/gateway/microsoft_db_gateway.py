@@ -8,13 +8,13 @@ DB_PATH = os.getenv("ACCESS_DB_PATH")
 
 DRIVER = "Microsoft Access Driver (*.mdb, *.accdb)"
 
-def get_connection():
+def get_connection(readonly=True):
     conn_str = (
         f"DRIVER={{{DRIVER}}};"
         f"DBQ={DB_PATH};"
+        f"ReadOnly={'True' if readonly else 'False'};"
     )
-    return pyodbc.connect(conn_str)
-
+    return pyodbc.connect(conn_str, autocommit=True)
 
 def query(sql, params=None):
     conn = get_connection()
