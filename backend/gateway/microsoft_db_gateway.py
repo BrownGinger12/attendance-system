@@ -11,32 +11,27 @@ DRIVER = "Microsoft Access Driver (*.mdb, *.accdb)"
 
 def get_connection(readonly=True):
     """
-    Connects to the Access DB. If file is locked, makes a temporary copy for read-only access.
-    Returns (connection, tmp_file_path) tuple. tmp_file_path is None if original DB used.
+    Connect to the Access DB.
+    If readonly, creates a temp copy to avoid file locks.
+    Returns (conn, tmp_file_path)
     """
     tmp_file_path = None
-    try:
-        conn_str = (
-            f"DRIVER={{{DRIVER}}};"
-            f"DBQ={DB_PATH};"
-            f"ReadOnly={'True' if readonly else 'False'};"
-        )
-        conn = pyodbc.connect(conn_str, autocommit=True)
-        return conn, tmp_file_path
-    except pyodbc.Error:
-        # fallback to temp copy
+    if readonly:
+        # Make a temporary copy
         tmp_file = tempfile.NamedTemporaryFile(suffix=".accdb", delete=False)
         shutil.copyfile(DB_PATH, tmp_file.name)
         tmp_file_path = tmp_file.name
-        conn_str = (
-            f"DRIVER={{{DRIVER}}};"
-            f"DBQ={tmp_file.name};"
-            f"ReadOnly=True;"
-        )
+        conn_str = f"DRIVER={{{DRIVER}}};DBQ={tmp_file.name};ReadOnly=True;"
         conn = pyodbc.connect(conn_str, autocommit=True)
-        return conn, tmp_file_path
+    else:
+        conn_str = f"DRIVER={{{DRIVER}}};DBQ={DB_PATH};ReadOnly=False;"
+        conn = pyodbc.connect(conn_str, autocommit=True)
+    return conn, tmp_file_path
 
 def fetch_query(sql, params=None):
+    """
+    Execute a SELECT query safely from Access DB
+    """
     conn, tmp_file_path = get_connection(readonly=True)
     cursor = conn.cursor()
     try:
@@ -51,6 +46,9 @@ def fetch_query(sql, params=None):
             os.remove(tmp_file_path)
 
 def query(sql, params=None):
+    """
+    Execute INSERT/UPDATE/DELETE queries
+    """
     conn, tmp_file_path = get_connection(readonly=False)
     cursor = conn.cursor()
     try:
@@ -64,3 +62,10 @@ def query(sql, params=None):
         conn.close()
         if tmp_file_path:
             os.remove(tmp_file_path)
+
+# Example usage
+if __name__ == "__main__":
+    # Fetch today's attendance safely
+    rows = fetch_query("SELECT * FROM ATTENDANCE ORDER BY CHECKTIME DESC")
+    for r in rows:
+        print(r)

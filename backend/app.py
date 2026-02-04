@@ -1,10 +1,16 @@
 # app.py
+import os
+import threading
+import time
+import shutil
+import tempfile
+from datetime import datetime, date, time as dtime
+
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 from flask_socketio import SocketIO, emit
-import os
-import threading
-from datetime import datetime, date, time as dtime
+import pyodbc
+from dotenv import load_dotenv
 
 from handler.dtr_generator_handler import fill_dtr_document
 from handler.employee_handler import (
@@ -24,24 +30,113 @@ from handler.attendance_record_handler import (
     get_attendance_employee
 )
 from handler.department_handler import get_departments, get_department_by_id
-from handler.attendance_watcher_handler import AttendanceWatcher
+
+# ------------------------------
+# Load env and DB config
+# ------------------------------
+load_dotenv()
+DB_PATH = os.getenv("ACCESS_DB_PATH")
+DRIVER = "Microsoft Access Driver (*.mdb, *.accdb)"
+
+# ------------------------------
+# Robust Access DB helper
+# ------------------------------
+def get_connection(readonly=True):
+    """
+    Connect to the Access DB.
+    If readonly=True, creates a temp copy to avoid file locks.
+    Returns (conn, tmp_file_path)
+    """
+    tmp_file_path = None
+    if readonly:
+        tmp_file = tempfile.NamedTemporaryFile(suffix=".accdb", delete=False)
+        shutil.copyfile(DB_PATH, tmp_file.name)
+        tmp_file_path = tmp_file.name
+        conn_str = f"DRIVER={{{DRIVER}}};DBQ={tmp_file.name};ReadOnly=True;"
+        conn = pyodbc.connect(conn_str, autocommit=True)
+    else:
+        conn_str = f"DRIVER={{{DRIVER}}};DBQ={DB_PATH};ReadOnly=False;"
+        conn = pyodbc.connect(conn_str, autocommit=True)
+    return conn, tmp_file_path
+
+def fetch_query(sql, params=None):
+    """
+    Execute a SELECT query safely from Access DB
+    """
+    conn, tmp_file_path = get_connection(readonly=True)
+    cursor = conn.cursor()
+    try:
+        cursor.execute(sql, params or [])
+        columns = [col[0] for col in cursor.description]
+        rows = cursor.fetchall()
+        return [dict(zip(columns, row)) for row in rows]
+    finally:
+        cursor.close()
+        conn.close()
+        if tmp_file_path:
+            os.remove(tmp_file_path)
+
+def query(sql, params=None):
+    """
+    Execute INSERT/UPDATE/DELETE queries
+    """
+    conn, tmp_file_path = get_connection(readonly=False)
+    cursor = conn.cursor()
+    try:
+        cursor.execute(sql, params or [])
+        conn.commit()
+        return {"statusCode": 200, "message": "Query executed successfully"}
+    except pyodbc.Error as err:
+        return {"statusCode": 500, "message": str(err)}
+    finally:
+        cursor.close()
+        conn.close()
+        if tmp_file_path:
+            os.remove(tmp_file_path)
 
 # ------------------------------
 # Flask + SocketIO setup
 # ------------------------------
 app = Flask(__name__)
 CORS(app)
-
-# Use eventlet for full WebSocket support
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 ATTENDANCE_NS = '/attendance'
 
 # ------------------------------
-# Attendance Watcher
+# AttendanceWatcher
 # ------------------------------
-watcher = AttendanceWatcher(socketio, namespace=ATTENDANCE_NS)
+class AttendanceWatcher:
+    def __init__(self, socketio, namespace=ATTENDANCE_NS):
+        self.socketio = socketio
+        self.namespace = namespace
+        self.running = True
+        self.last_rows = []
 
-# Start watcher in a separate daemon thread
+    def start(self):
+        while self.running:
+            try:
+                rows = fetch_query("SELECT * FROM ATTENDANCE ORDER BY CHECKTIME DESC")
+                if rows != self.last_rows:
+                    # Convert CHECKTIME to ISO string
+                    for r in rows:
+                        if isinstance(r.get("CHECKTIME"), datetime):
+                            r["CHECKTIME"] = r["CHECKTIME"].isoformat()
+                    self.socketio.emit("attendance:update", rows, namespace=self.namespace)
+                    self.last_rows = rows
+            except Exception as e:
+                print("Attendance watcher error:", e)
+            time.sleep(3)  # poll every 3 seconds
+
+    def get_today_attendance(self):
+        try:
+            today_str = date.today().strftime("%Y-%m-%d")
+            sql = f"SELECT * FROM ATTENDANCE WHERE FORMAT(CHECKTIME,'yyyy-mm-dd')='{today_str}'"
+            return fetch_query(sql)
+        except Exception as e:
+            print("Attendance watcher error:", e)
+            return []
+
+watcher = AttendanceWatcher(socketio, namespace=ATTENDANCE_NS)
 threading.Thread(target=watcher.start, daemon=True).start()
 
 # ------------------------------
@@ -52,15 +147,11 @@ def on_connect():
     print("Attendance socket connected")
     emit("status", {"message": "Connected to attendance namespace"})
 
-    # Send today's attendance immediately
-    today_start = datetime.combine(date.today(), dtime.min)
-    rows = watcher.get_today_attendance()  # method in AttendanceWatcher
-
-    # Convert CHECKTIME to ISO string
+    # Send today's attendance on connect
+    rows = watcher.get_today_attendance()
     for r in rows:
         if isinstance(r.get("CHECKTIME"), datetime):
             r["CHECKTIME"] = r["CHECKTIME"].isoformat()
-
     emit("attendance:init", rows)
 
 @socketio.on('disconnect', namespace=ATTENDANCE_NS)
@@ -133,13 +224,10 @@ def attendance_day():
     return get_attendance_day()
 
 # ------------------------------
-# Export DTR endpoint
+# DTR Export
 # ------------------------------
 @app.route('/api/fill-dtr-json', methods=['POST'])
 def fill_dtr_json():
-    """
-    Fill DTR document with attendance data and download it
-    """
     try:
         json_data = request.get_json()
         if not json_data or 'name' not in json_data or 'data' not in json_data:
@@ -168,8 +256,7 @@ def fill_dtr_json():
         return jsonify({'error': str(e)}), 500
 
 # ------------------------------
-# Run the app
+# Run app
 # ------------------------------
 if __name__ == "__main__":
-    # Use SocketIO with Eventlet for WebSocket support
     socketio.run(app, debug=False, use_reloader=False, host="0.0.0.0", port=5000)

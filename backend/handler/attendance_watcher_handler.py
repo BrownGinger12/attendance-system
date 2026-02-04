@@ -1,4 +1,3 @@
-# handler/attendance_watcher_handler.py
 from datetime import datetime, date, time as dtime
 import time
 from model.attendance_records import AttendanceRecord
@@ -22,8 +21,8 @@ class AttendanceWatcher:
     def _loop(self):
         while self.running:
             try:
-                # Initialize last_checktime to earliest record today
                 if self.last_checktime is None:
+                    # Initialize to latest record today
                     rows = self.get_today_attendance()
                     if rows:
                         self.last_checktime = rows[-1]["CHECKTIME"]
@@ -36,7 +35,7 @@ class AttendanceWatcher:
                 for record in records:
                     self.last_checktime = record["CHECKTIME"]
 
-                    # Convert CHECKTIME to string for JSON
+                    # Convert CHECKTIME to ISO string
                     if isinstance(record.get("CHECKTIME"), datetime):
                         record["CHECKTIME"] = record["CHECKTIME"].isoformat()
 
