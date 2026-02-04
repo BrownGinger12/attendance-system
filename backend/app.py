@@ -32,8 +32,8 @@ from handler.attendance_watcher_handler import AttendanceWatcher
 app = Flask(__name__)
 CORS(app)
 
-# Use threading mode to avoid Eventlet issues
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
+# Use eventlet for full WebSocket support
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 ATTENDANCE_NS = '/attendance'
 
 # ------------------------------
@@ -54,7 +54,7 @@ def on_connect():
 
     # Send today's attendance immediately
     today_start = datetime.combine(date.today(), dtime.min)
-    rows = watcher.get_today_attendance()  # method we'll add in AttendanceWatcher
+    rows = watcher.get_today_attendance()  # method in AttendanceWatcher
 
     # Convert CHECKTIME to ISO string
     for r in rows:
@@ -66,7 +66,6 @@ def on_connect():
 @socketio.on('disconnect', namespace=ATTENDANCE_NS)
 def on_disconnect():
     print("Attendance socket disconnected")
-
 
 # ------------------------------
 # Department endpoints
@@ -101,15 +100,19 @@ def update_employee_api(user_id):
 @app.route("/employees/count", methods=["GET"])
 def employees_count():
     return get_employee_count()
+
 @app.route('/employee/<int:user_id>', methods=['DELETE'])
 def delete_employee_route(user_id):
     return delete_employee(user_id)
+
 @app.route('/employees/search', methods=['GET'])
 def search_employees_route():
     return search_employees()
+
 @app.route('/employees/<int:user_id>/fingerprints', methods=['GET'])
 def get_fingerprints_route(user_id):
     return get_user_fingerprints(user_id)
+
 @app.route('/employees/export/excel', methods=['GET'])
 def export_excel_route():
     return export_employees_to_excel()
@@ -168,5 +171,5 @@ def fill_dtr_json():
 # Run the app
 # ------------------------------
 if __name__ == "__main__":
-    # No eventlet, just threading mode
+    # Use SocketIO with Eventlet for WebSocket support
     socketio.run(app, debug=False, use_reloader=False, host="0.0.0.0", port=5000)
