@@ -169,4 +169,4 @@ def fill_dtr_json():
 # ------------------------------
 if __name__ == "__main__":
     # No eventlet, just threading mode
-    socketio.run(app, debug=True, host="0.0.0.0", port=5000)
+    socketio.run(app, debug=False, use_reloader=False, host="0.0.0.0", port=5000)
