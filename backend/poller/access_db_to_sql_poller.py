@@ -1,4 +1,3 @@
-# poller/access_to_mysql.py
 import pyodbc
 import pymysql
 import os
@@ -111,7 +110,7 @@ def sync_departments():
         traceback.print_exc()
 
 # ------------------------
-# EMPLOYEES SYNC (full history)
+# EMPLOYEES SYNC (only new employees)
 # ------------------------
 def sync_employees():
     try:
@@ -137,21 +136,23 @@ def sync_employees():
 
         placeholders = ", ".join(["%s"] * len(columns))
         columns_str = ", ".join(columns)
-        update_str = ", ".join([f"{col} = VALUES({col})" for col in columns])
 
+        # Use INSERT IGNORE to only add new employees, skip existing ones
         sql = f"""
-        INSERT INTO employees ({columns_str})
+        INSERT IGNORE INTO employees ({columns_str})
         VALUES ({placeholders})
-        ON DUPLICATE KEY UPDATE {update_str}
         """
 
+        inserted_count = 0
         for row in rows:
             row_tuple = tuple(list(row) + ["normal"])
-            mysql_cursor.execute(sql, row_tuple)
+            result = mysql_cursor.execute(sql, row_tuple)
+            if mysql_cursor.rowcount > 0:
+                inserted_count += 1
 
         mysql_cursor.close()
         mysql_conn.close()
-        print(f"Synced {len(rows)} employees from Access to MySQL.")
+        print(f"Added {inserted_count} new employees from Access to MySQL (skipped {len(rows) - inserted_count} existing).")
 
     except Exception as e:
         print("Employee poller error:", e)
