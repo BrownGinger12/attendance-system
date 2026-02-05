@@ -10,17 +10,20 @@ config = {
     "user": os.getenv("MYSQL_USER"),
     "password": os.getenv("MYSQL_PASSWORD"),
     "database": os.getenv("MYSQL_DB"),
+    "port": int(os.getenv("MYSQL_PORT", 3306)),  # Added port here
 }
 
 def migrate():
+    conn = None
+    cursor = None
     try:
         conn = mysql.connector.connect(**config)
         cursor = conn.cursor()
-        print("✅ Connected to MySQL")
+        print("✅ Connected to MySQL on port", config["port"])
 
-        # =========================
+        # -------------------------
         # Departments
-        # =========================
+        # -------------------------
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS departments (
             deptid INT PRIMARY KEY,
@@ -43,9 +46,9 @@ def migrate():
         ) ENGINE=InnoDB;
         """)
 
-        # =========================
+        # -------------------------
         # Employees
-        # =========================
+        # -------------------------
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS employees (
             userid INT PRIMARY KEY,
@@ -104,9 +107,9 @@ def migrate():
         ) ENGINE=InnoDB;
         """)
 
-        # =========================
+        # -------------------------
         # Attendance
-        # =========================
+        # -------------------------
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS attendance (
             id BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -133,6 +136,7 @@ def migrate():
             cursor.close()
         if conn:
             conn.close()
+
 
 if __name__ == "__main__":
     migrate()
