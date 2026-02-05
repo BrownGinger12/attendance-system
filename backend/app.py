@@ -140,6 +140,12 @@ def attendance_day():
 # ------------------------------
 # DTR Export endpoint
 # ------------------------------
+# FIXED API ROUTE - Replace your existing /api/fill-dtr-json endpoint with this:
+
+from flask import Flask, request, jsonify, send_file
+from dtr_generator import fill_dtr_document_from_data
+import os
+
 @app.route('/api/fill-dtr-json', methods=['POST'])
 def fill_dtr_json():
     try:
@@ -151,7 +157,14 @@ def fill_dtr_json():
         if not os.path.exists(template_path):
             return jsonify({'error': f'Template not found: {template_path}'}), 404
 
-        filled_doc, employee_name, month_name, attendance_days = fill_dtr_document(template_path, json_data)
+        employee_name = json_data.get('name', 'Unknown')
+
+        # Use the new function that accepts data directly
+        filled_doc, employee_name, month_name, attendance_days = fill_dtr_document_from_data(
+            template_path, 
+            json_data,
+            employee_name
+        )
 
         from io import BytesIO
         doc_buffer = BytesIO()
@@ -167,6 +180,8 @@ def fill_dtr_json():
             download_name=output_filename
         )
     except Exception as e:
+        import traceback
+        print(traceback.format_exc())  # This will help debug
         return jsonify({'error': str(e)}), 500
 
 # ------------------------------

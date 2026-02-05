@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const apiClient = axios.create({
-  baseURL: "http://127.0.0.1:5000",
+  baseURL: "http://10.10.10.2:5000",
   headers: {
     "Content-Type": "application/json",
   },
@@ -17,7 +17,7 @@ apiClient.interceptors.request.use(
   },
   (error) => {
     return Promise.reject(error);
-  }
+  },
 );
 
 // Response interceptor
@@ -29,7 +29,7 @@ apiClient.interceptors.response.use(
     // Handle errors globally
     console.error("API Error:", error);
     return Promise.reject(error);
-  }
+  },
 );
 
 export default apiClient;

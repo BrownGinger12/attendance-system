@@ -53,7 +53,7 @@ const RealtimeAttendancePage: React.FC = () => {
 
     fetchTotalEmployees();
 
-    const socket = io("http://127.0.0.1:5000/attendance", {
+    const socket = io("http://10.10.10.2:5000/attendance", {
       path: "/socket.io",
       transports: ["websocket"],
       reconnection: true,
@@ -75,7 +75,7 @@ const RealtimeAttendancePage: React.FC = () => {
       const logsWithNames = await Promise.all(
         data.map(async (log: AttendanceLog) => ({
           ...log,
-          employeeName: await fetchEmployeeName(log.USERID),
+          employeeName: await fetchEmployeeName(log.userid),
         })),
       );
       setLogs(logsWithNames);
@@ -86,7 +86,7 @@ const RealtimeAttendancePage: React.FC = () => {
       console.log("New record:", record);
       const recordWithName = {
         ...record,
-        employeeName: await fetchEmployeeName(record.USERID),
+        employeeName: await fetchEmployeeName(record.userid),
       };
 
       setLogs((prev) => {
@@ -114,7 +114,7 @@ const RealtimeAttendancePage: React.FC = () => {
 
     try {
       const response = await employeeService.getEmployeeById(userId);
-      const name = response.data.Name;
+      const name = response.data.name;
       setEmployeeCache((prev) => ({ ...prev, [userId]: name }));
       return name;
     } catch (err) {
@@ -138,7 +138,7 @@ const RealtimeAttendancePage: React.FC = () => {
   const filteredAttendance = attendanceArray.filter((employee) => {
     const matchesSearch =
       employee.employeeName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      employee.USERID.toString().includes(searchQuery);
+      employee.userid.toString().includes(searchQuery);
 
     let matchesFilter = true;
     if (filterStatus === "late") {
@@ -322,28 +322,28 @@ const RealtimeAttendancePage: React.FC = () => {
                 ) : (
                   filteredAttendance.map((employee) => {
                     const amIn = employee.amCheckIn
-                      ? formatTimeAMPM(employee.amCheckIn.CHECKTIME)
+                      ? formatTimeAMPM(employee.amCheckIn.checktime)
                       : "-";
                     const amOut = employee.amCheckOut
-                      ? formatTimeAMPM(employee.amCheckOut.CHECKTIME)
+                      ? formatTimeAMPM(employee.amCheckOut.checktime)
                       : "-";
                     const pmIn = employee.pmCheckIn
-                      ? formatTimeAMPM(employee.pmCheckIn.CHECKTIME)
+                      ? formatTimeAMPM(employee.pmCheckIn.checktime)
                       : "-";
                     const pmOut = employee.pmCheckOut
-                      ? formatTimeAMPM(employee.pmCheckOut.CHECKTIME)
+                      ? formatTimeAMPM(employee.pmCheckOut.checktime)
                       : "-";
                     const date =
                       employee.amCheckIn || employee.pmCheckIn
                         ? formatDate(
                             (employee.amCheckIn || employee.pmCheckIn)!
-                              .CHECKTIME,
+                              .checktime,
                           )
                         : "-";
 
                     return (
                       <tr
-                        key={employee.USERID}
+                        key={employee.userid}
                         className="hover:bg-slate-800/50 transition-colors"
                       >
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -363,7 +363,7 @@ const RealtimeAttendancePage: React.FC = () => {
                                 )}
                               </div>
                               <p className="text-xs text-slate-500">
-                                ID: {employee.USERID}
+                                ID: {employee.userid}
                               </p>
                             </div>
                           </div>

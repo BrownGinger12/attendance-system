@@ -117,6 +117,86 @@ def calculate_undertime(record, expected_am_hours=4, expected_pm_hours=4):
     return hours, minutes
 
 
+def fill_dtr_document_from_data(template_path, json_data, employee_name=''):
+    """
+    Fill DTR DOCX template using provided attendance data (no database fetch)
+    json_data should be: {"name": "...", "data": [attendance records]}
+    """
+    doc = Document(template_path)
+    json_data['name'] = employee_name
+
+    attendance = parse_attendance_data(json_data)
+
+    # Determine year/month names
+    if json_data['data']:
+        first_dt = json_data['data'][0]['checktime'] if isinstance(json_data['data'][0]['checktime'], datetime) else datetime.strptime(json_data['data'][0]['checktime'], '%Y-%m-%d %H:%M:%S')
+        year, month_num = first_dt.year, first_dt.month
+    else:
+        now = datetime.now()
+        year, month_num = now.year, now.month
+    month_name = datetime(year, month_num, 1).strftime('%B %Y')
+
+    weekends = get_month_weekends(year, month_num)
+    employee_name = employee_name.upper()
+
+    # Total undertime
+    total_hours = total_minutes = 0
+    for date_obj, record in attendance.items():
+        uh, um = calculate_undertime(record)
+        total_hours += uh
+        total_minutes += um
+    total_hours += total_minutes // 60
+    total_minutes = total_minutes % 60
+
+    # Fill paragraphs
+    for paragraph in doc.paragraphs:
+        paragraph.text = paragraph.text.replace('[name]', employee_name)\
+                                       .replace('[month]', month_name)\
+                                       .replace('[toth]', str(total_hours))\
+                                       .replace('[totm]', str(total_minutes))
+
+    # Fill tables
+    for table in doc.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                text = cell.text
+                for day in range(1, 32):
+                    try:
+                        date_obj = datetime(year, month_num, day).date()
+                    except ValueError:
+                        continue
+
+                    is_weekend = day in weekends
+                    weekend_label = weekends.get(day, '')
+
+                    placeholders = {
+                        f'[aa{day}]': '', f'[da{day}]': '', f'[ap{day}]': '', f'[dp{day}]': '',
+                        f'[uh{day}]': '', f'[m{day}]': ''
+                    }
+
+                    if is_weekend:
+                        placeholders[f'[aa{day}]'] = weekend_label
+                    elif date_obj in attendance:
+                        record = attendance[date_obj]
+                        placeholders[f'[aa{day}]'] = record['in'][0] if record['in'] else ''
+                        placeholders[f'[da{day}]'] = record['out'][0] if record['out'] else ''
+                        placeholders[f'[ap{day}]'] = record['in'][1] if len(record['in']) > 1 else ''
+                        placeholders[f'[dp{day}]'] = record['out'][1] if len(record['out']) > 1 else ''
+                        uh, um = calculate_undertime(record)
+                        placeholders[f'[uh{day}]'] = str(uh) if uh > 0 else ''
+                        placeholders[f'[m{day}]'] = str(um) if um > 0 else ''
+
+                    for ph, val in placeholders.items():
+                        text = text.replace(ph, val)
+
+                cell.text = text
+                for paragraph in cell.paragraphs:
+                    for run in paragraph.runs:
+                        run.font.size = Pt(6)
+
+    return doc, employee_name, month_name, len(attendance)
+
+
 def fill_dtr_document(template_path, userid, month, employee_name=''):
     """
     Fill DTR DOCX template for a specific user and month

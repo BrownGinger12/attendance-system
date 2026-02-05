@@ -10,11 +10,11 @@ interface EmployeeModalProps {
 }
 
 interface EmployeeInfo {
-  USERID: number;
-  Name: string;
-  DEFAULTDEPTID: number;
+  userid: number;
+  name: string;
+  defaultdeptid: number;
   PHOTO: string | null;
-  Badgenumber: string;
+  badgenumber: string;
 }
 
 const EmployeeModal: React.FC<EmployeeModalProps> = ({
@@ -52,8 +52,8 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({
     try {
       const response = await employeeService.getEmployeeById(userId);
       setEmployee(response.data);
-      setEditName(response.data.Name);
-      setEditDeptId(response.data.DEFAULTDEPTID);
+      setEditName(response.data.name);
+      setEditDeptId(response.data.defaultdeptid);
 
       // Handle photo - base64 string
       if (response.data.PHOTO) {
@@ -101,11 +101,11 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({
     try {
       const payload: any = {};
 
-      if (editName !== employee?.Name) {
+      if (editName !== employee?.name) {
         payload.Name = editName;
       }
 
-      if (editDeptId !== employee?.DEFAULTDEPTID) {
+      if (editDeptId !== employee?.defaultdeptid) {
         payload.Deptid = editDeptId;
       }
 
@@ -137,8 +137,8 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({
 
   const handleCancel = () => {
     setIsEditing(false);
-    setEditName(employee?.Name || "");
-    setEditDeptId(employee?.DEFAULTDEPTID || 0);
+    setEditName(employee?.name || "");
+    setEditDeptId(employee?.defaultdeptid || 0);
     setEditPhoto(null);
 
     if (employee?.PHOTO) {
@@ -173,12 +173,12 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({
       }
 
       const payload = {
-        name: employee?.Name || "Unknown",
+        name: employee?.name || "Unknown",
         data: attendanceResponse.data,
       };
 
       // Call the export DTR API and get blob response
-      const response = await fetch("http://127.0.0.1:5000/api/fill-dtr-json", {
+      const response = await fetch("http://10.10.10.2:5000/api/fill-dtr-json", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -197,7 +197,7 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `DTR_${employee?.Name}_${month}.docx`;
+      a.download = `DTR_${employee?.name}_${month}.docx`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -268,7 +268,7 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({
                     {photoPreview ? (
                       <img
                         src={photoPreview}
-                        alt={employee.Name}
+                        alt={employee.name}
                         className="w-32 h-32 rounded-full object-cover border-4 border-slate-800"
                       />
                     ) : (
@@ -302,7 +302,7 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({
                       className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-slate-600 transition-colors"
                     />
                   ) : (
-                    <p className="text-white font-medium">{employee.Name}</p>
+                    <p className="text-white font-medium">{employee.name}</p>
                   )}
                 </div>
 
@@ -310,7 +310,7 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({
                   <label className="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-2">
                     Employee ID
                   </label>
-                  <p className="text-slate-300">{employee.Badgenumber}</p>
+                  <p className="text-slate-300">{employee.badgenumber}</p>
                 </div>
 
                 <div>
@@ -331,7 +331,7 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({
                     </select>
                   ) : (
                     <p className="text-slate-300">
-                      {getDepartmentName(employee.DEFAULTDEPTID)}
+                      {getDepartmentName(employee.defaultdeptid)}
                     </p>
                   )}
                 </div>
@@ -446,7 +446,7 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({
               <p className="text-slate-300 mb-6">
                 Are you sure you want to delete{" "}
                 <span className="font-semibold text-white">
-                  {employee?.Name}
+                  {employee?.name}
                 </span>
                 ? All associated data will be permanently removed.
               </p>
