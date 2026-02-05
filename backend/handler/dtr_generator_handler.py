@@ -24,17 +24,40 @@ def get_attendance_from_db(userid, month):
     return {"name": "", "data": rows}
 
 
+def parse_datetime_flexible(dt_value):
+    """Helper to parse various datetime formats"""
+    if isinstance(dt_value, datetime):
+        return dt_value
+    
+    # Try different datetime formats
+    formats = [
+        '%Y-%m-%d %H:%M:%S',
+        '%a, %d %b %Y %H:%M:%S GMT',  # GMT format from API
+        '%Y-%m-%dT%H:%M:%S',
+        '%Y-%m-%dT%H:%M:%S.%f',
+        '%Y-%m-%dT%H:%M:%S.%fZ',
+    ]
+    
+    for fmt in formats:
+        try:
+            return datetime.strptime(dt_value, fmt)
+        except ValueError:
+            continue
+    
+    # If none of the formats work, raise an error with helpful message
+    raise ValueError(f"Unable to parse datetime: {dt_value}")
+
+
 def parse_attendance_data(json_data):
     """Parse attendance records into structured AM/PM IN/OUT"""
     sorted_records = sorted(
         json_data['data'],
-        key=lambda x: x['checktime'] if isinstance(x['checktime'], datetime) 
-        else datetime.strptime(x['checktime'], '%Y-%m-%d %H:%M:%S')
+        key=lambda x: parse_datetime_flexible(x['checktime'])
     )
 
     attendance = {}
     for record in sorted_records:
-        dt = record['checktime'] if isinstance(record['checktime'], datetime) else datetime.strptime(record['checktime'], '%Y-%m-%d %H:%M:%S')
+        dt = parse_datetime_flexible(record['checktime'])
         date_key = dt.date()
         if date_key not in attendance:
             attendance[date_key] = {'in': [], 'out': []}
@@ -129,7 +152,7 @@ def fill_dtr_document_from_data(template_path, json_data, employee_name=''):
 
     # Determine year/month names
     if json_data['data']:
-        first_dt = json_data['data'][0]['checktime'] if isinstance(json_data['data'][0]['checktime'], datetime) else datetime.strptime(json_data['data'][0]['checktime'], '%Y-%m-%d %H:%M:%S')
+        first_dt = parse_datetime_flexible(json_data['data'][0]['checktime'])
         year, month_num = first_dt.year, first_dt.month
     else:
         now = datetime.now()
@@ -209,7 +232,7 @@ def fill_dtr_document(template_path, userid, month, employee_name=''):
 
     # Determine year/month names
     if json_data['data']:
-        first_dt = json_data['data'][0]['checktime'] if isinstance(json_data['data'][0]['checktime'], datetime) else datetime.strptime(json_data['data'][0]['checktime'], '%Y-%m-%d %H:%M:%S')
+        first_dt = parse_datetime_flexible(json_data['data'][0]['checktime'])
         year, month_num = first_dt.year, first_dt.month
     else:
         now = datetime.now()
