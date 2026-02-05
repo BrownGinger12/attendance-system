@@ -162,25 +162,60 @@ def sync_employees():
 # ------------------------
 # ATTENDANCE SYNC (only new records)
 # ------------------------
-last_attendance_check = None
+CHECKPOINT_FILE = "attendance_checkpoint.txt"
+
+def get_last_checkpoint():
+    """Read the last checkpoint timestamp from file"""
+    if os.path.exists(CHECKPOINT_FILE):
+        try:
+            with open(CHECKPOINT_FILE, 'r') as f:
+                timestamp_str = f.read().strip()
+                if timestamp_str:
+                    return datetime.fromisoformat(timestamp_str)
+        except Exception as e:
+            print(f"Error reading checkpoint: {e}")
+    return None
+
+def save_checkpoint(timestamp):
+    """Save the checkpoint timestamp to file"""
+    try:
+        with open(CHECKPOINT_FILE, 'w') as f:
+            f.write(timestamp.isoformat())
+    except Exception as e:
+        print(f"Error saving checkpoint: {e}")
 
 def sync_attendance():
-    global last_attendance_check
     try:
         temp_path = get_temp_copy()
         access_conn = get_access_conn(temp_path)
         access_cursor = access_conn.cursor()
 
-        if last_attendance_check:
-            query = "SELECT * FROM CHECKINOUT WHERE CHECKTIME > ? ORDER BY CHECKTIME"
-            access_cursor.execute(query, (last_attendance_check,))
-        else:
-            today_start = datetime.combine(date.today(), dtime.min)
+        last_checkpoint = get_last_checkpoint()
+        
+        if last_checkpoint:
+            # Debug: show what we're looking for
+            # Use >= instead of > to be safer, we'll handle duplicates with INSERT...ON DUPLICATE KEY
+            print(f"[DEBUG] Looking for records from: {last_checkpoint}")
             query = "SELECT * FROM CHECKINOUT WHERE CHECKTIME >= ? ORDER BY CHECKTIME"
-            access_cursor.execute(query, (today_start,))
+            access_cursor.execute(query, (last_checkpoint,))
+        else:
+            # First run - sync all records (or change to today_start if you prefer)
+            print("[DEBUG] First run - syncing all records")
+            query = "SELECT * FROM CHECKINOUT ORDER BY CHECKTIME"
+            access_cursor.execute(query)
 
         rows = access_cursor.fetchall()
         access_columns = [column[0] for column in access_cursor.description]
+        
+        # Debug: show what we found
+        if rows:
+            print(f"[DEBUG] Found {len(rows)} records to process")
+            checktime_idx = access_columns.index("CHECKTIME")
+            print(f"[DEBUG] First record time: {rows[0][checktime_idx]}")
+            print(f"[DEBUG] Last record time: {rows[-1][checktime_idx]}")
+        else:
+            print("[DEBUG] No new records found")
+        
         access_cursor.close()
         access_conn.close()
         os.remove(temp_path)
@@ -225,14 +260,24 @@ def sync_attendance():
         ON DUPLICATE KEY UPDATE {update_str}
         """
 
+        latest_timestamp = None
         for row in rows:
             # Extract only the values for matching columns
             values = tuple(row[idx] for idx in access_col_indices)
             mysql_cursor.execute(sql, values)
-            last_attendance_check = row[access_columns.index("CHECKTIME")]
+            # Track the latest timestamp
+            checktime = row[access_columns.index("CHECKTIME")]
+            if latest_timestamp is None or checktime > latest_timestamp:
+                latest_timestamp = checktime
 
         mysql_cursor.close()
         mysql_conn.close()
+        
+        # Save the latest timestamp as checkpoint
+        if latest_timestamp:
+            save_checkpoint(latest_timestamp)
+            print(f"[DEBUG] Saved checkpoint: {latest_timestamp}")
+        
         print(f"Synced {len(rows)} new attendance records (using {len(mysql_col_names)} matching columns).")
 
     except Exception as e:
