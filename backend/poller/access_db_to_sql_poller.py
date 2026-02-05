@@ -171,7 +171,9 @@ def get_last_checkpoint():
             with open(CHECKPOINT_FILE, 'r') as f:
                 timestamp_str = f.read().strip()
                 if timestamp_str:
-                    return datetime.fromisoformat(timestamp_str)
+                    checkpoint = datetime.fromisoformat(timestamp_str)
+                    print(f"[DEBUG] Loaded checkpoint: {checkpoint} (type: {type(checkpoint)})")
+                    return checkpoint
         except Exception as e:
             print(f"Error reading checkpoint: {e}")
     return None
@@ -179,8 +181,19 @@ def get_last_checkpoint():
 def save_checkpoint(timestamp):
     """Save the checkpoint timestamp to file"""
     try:
+        # Handle both datetime objects and strings
+        if isinstance(timestamp, datetime):
+            timestamp_str = timestamp.isoformat()
+        else:
+            # If it's already a datetime from Access, convert to datetime if needed
+            if hasattr(timestamp, 'isoformat'):
+                timestamp_str = timestamp.isoformat()
+            else:
+                timestamp_str = str(timestamp)
+        
         with open(CHECKPOINT_FILE, 'w') as f:
-            f.write(timestamp.isoformat())
+            f.write(timestamp_str)
+        print(f"[DEBUG] Saved checkpoint: {timestamp_str}")
     except Exception as e:
         print(f"Error saving checkpoint: {e}")
 
@@ -193,13 +206,12 @@ def sync_attendance():
         last_checkpoint = get_last_checkpoint()
         
         if last_checkpoint:
-            # Debug: show what we're looking for
-            # Use >= instead of > to be safer, we'll handle duplicates with INSERT...ON DUPLICATE KEY
-            print(f"[DEBUG] Looking for records from: {last_checkpoint}")
-            query = "SELECT * FROM CHECKINOUT WHERE CHECKTIME >= ? ORDER BY CHECKTIME"
+            # Use > to get only records AFTER the last checkpoint
+            print(f"[DEBUG] Looking for records after: {last_checkpoint}")
+            query = "SELECT * FROM CHECKINOUT WHERE CHECKTIME > ? ORDER BY CHECKTIME"
             access_cursor.execute(query, (last_checkpoint,))
         else:
-            # First run - sync all records (or change to today_start if you prefer)
+            # First run - sync all records
             print("[DEBUG] First run - syncing all records")
             query = "SELECT * FROM CHECKINOUT ORDER BY CHECKTIME"
             access_cursor.execute(query)
@@ -211,8 +223,10 @@ def sync_attendance():
         if rows:
             print(f"[DEBUG] Found {len(rows)} records to process")
             checktime_idx = access_columns.index("CHECKTIME")
-            print(f"[DEBUG] First record time: {rows[0][checktime_idx]}")
-            print(f"[DEBUG] Last record time: {rows[-1][checktime_idx]}")
+            first_time = rows[0][checktime_idx]
+            last_time = rows[-1][checktime_idx]
+            print(f"[DEBUG] First record time: {first_time} (type: {type(first_time)})")
+            print(f"[DEBUG] Last record time: {last_time} (type: {type(last_time)})")
         else:
             print("[DEBUG] No new records found")
         
@@ -276,7 +290,6 @@ def sync_attendance():
         # Save the latest timestamp as checkpoint
         if latest_timestamp:
             save_checkpoint(latest_timestamp)
-            print(f"[DEBUG] Saved checkpoint: {latest_timestamp}")
         
         print(f"Synced {len(rows)} new attendance records (using {len(mysql_col_names)} matching columns).")
 
