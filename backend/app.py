@@ -6,7 +6,7 @@ import os
 import threading
 from datetime import datetime, date, time as dtime
 
-from handler.dtr_generator_handler import fill_dtr_document
+from handler.dtr_generator_handler import fill_dtr_document, fill_dtr_document_from_data
 from handler.employee_handler import (
     delete_employee,
     export_employees_to_excel,
@@ -141,10 +141,6 @@ def attendance_day():
 # DTR Export endpoint
 # ------------------------------
 # FIXED API ROUTE - Replace your existing /api/fill-dtr-json endpoint with this:
-
-from flask import Flask, request, jsonify, send_file
-from dtr_generator import fill_dtr_document_from_data
-import os
 
 @app.route('/api/fill-dtr-json', methods=['POST'])
 def fill_dtr_json():
