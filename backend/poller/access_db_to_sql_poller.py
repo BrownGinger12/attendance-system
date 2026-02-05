@@ -18,12 +18,13 @@ MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD")
 MYSQL_DB = os.getenv("MYSQL_DB")
 
 # ------------------------
-# Access connection
+# Access connection (READ-ONLY)
 # ------------------------
 def get_access_conn():
     conn_str = (
         r"DRIVER={Microsoft Access Driver (*.mdb, *.accdb)};"
         f"DBQ={ACCESS_DB_PATH};"
+        "ReadOnly=True;"
     )
     return pyodbc.connect(conn_str)
 
@@ -49,7 +50,6 @@ def sync_departments():
         access_cursor.execute("SELECT * FROM DEPARTMENTS")
         rows = access_cursor.fetchall()
         columns = [column[0] for column in access_cursor.description]
-
         access_cursor.close()
         access_conn.close()
 
@@ -90,7 +90,6 @@ def sync_employees():
         access_cursor.execute("SELECT * FROM USERINFO")
         rows = access_cursor.fetchall()
         columns = [column[0] for column in access_cursor.description]
-
         access_cursor.close()
         access_conn.close()
 
@@ -149,7 +148,6 @@ def sync_attendance():
 
         rows = access_cursor.fetchall()
         columns = [column[0] for column in access_cursor.description]
-
         access_cursor.close()
         access_conn.close()
 
