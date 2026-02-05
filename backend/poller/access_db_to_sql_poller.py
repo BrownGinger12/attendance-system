@@ -166,13 +166,17 @@ def sync_attendance():
             access_cursor.execute(query, (today_start,))
 
         rows = access_cursor.fetchall()
-        columns = [column[0] for column in access_cursor.description]
+        all_columns = [column[0] for column in access_cursor.description]
         access_cursor.close()
         access_conn.close()
         os.remove(temp_path)
 
         if not rows:
             return
+
+        # Filter out Memoinfo column
+        columns = [col for col in all_columns if col.lower() != 'memoinfo']
+        memoinfo_index = all_columns.index('Memoinfo') if 'Memoinfo' in all_columns else None
 
         mysql_conn = get_mysql_conn()
         mysql_cursor = mysql_conn.cursor()
@@ -187,8 +191,15 @@ def sync_attendance():
         """
 
         for row in rows:
-            mysql_cursor.execute(sql, tuple(row))
-            last_attendance_check = row[columns.index("CHECKTIME")]
+            # Remove Memoinfo value from row if it exists
+            if memoinfo_index is not None:
+                filtered_row = list(row)
+                filtered_row.pop(memoinfo_index)
+                mysql_cursor.execute(sql, tuple(filtered_row))
+            else:
+                mysql_cursor.execute(sql, tuple(row))
+            
+            last_attendance_check = row[all_columns.index("CHECKTIME")]
 
         mysql_cursor.close()
         mysql_conn.close()
