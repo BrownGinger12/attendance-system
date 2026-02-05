@@ -1,5 +1,5 @@
-import mysql.connector
-from mysql.connector import Error
+import pymysql
+from pymysql import Error
 from dotenv import load_dotenv
 import os
 
@@ -9,21 +9,21 @@ config = {
     "host": os.getenv("MYSQL_HOST"),
     "user": os.getenv("MYSQL_USER"),
     "password": os.getenv("MYSQL_PASSWORD"),
-    "database": os.getenv("MYSQL_DB"),
-    "port": int(os.getenv("MYSQL_PORT", 3306)),  # Added port here
+    "database": os.getenv("MYSQL_DATABASE"),  # Changed from MYSQL_DB
+    "port": int(os.getenv("MYSQL_PORT", 3306))
 }
 
 def migrate():
     conn = None
     cursor = None
     try:
-        conn = mysql.connector.connect(**config)
+        conn = pymysql.connect(**config)
         cursor = conn.cursor()
-        print("✅ Connected to MySQL on port", config["port"])
+        print("✅ Connected to MySQL")
 
-        # -------------------------
+        # =========================
         # Departments
-        # -------------------------
+        # =========================
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS departments (
             deptid INT PRIMARY KEY,
@@ -45,10 +45,11 @@ def migrate():
             INDEX idx_supdept (supdeptid)
         ) ENGINE=InnoDB;
         """)
+        print("✅ Created departments table")
 
-        # -------------------------
+        # =========================
         # Employees
-        # -------------------------
+        # =========================
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS employees (
             userid INT PRIMARY KEY,
@@ -106,10 +107,11 @@ def migrate():
             INDEX idx_emp_dept (defaultdeptid)
         ) ENGINE=InnoDB;
         """)
+        print("✅ Created employees table")
 
-        # -------------------------
+        # =========================
         # Attendance
-        # -------------------------
+        # =========================
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS attendance (
             id BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -124,19 +126,21 @@ def migrate():
             INDEX idx_att_time (checktime)
         ) ENGINE=InnoDB;
         """)
+        print("✅ Created attendance table")
 
         conn.commit()
         print("✅ Migration completed successfully")
 
     except Error as e:
         print("❌ Migration failed:", e)
+        import traceback
+        traceback.print_exc()
 
     finally:
         if cursor:
             cursor.close()
         if conn:
             conn.close()
-
 
 if __name__ == "__main__":
     migrate()
