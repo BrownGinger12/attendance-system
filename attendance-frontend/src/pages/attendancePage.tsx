@@ -42,7 +42,7 @@ const AttendanceRecordPage: React.FC = () => {
 
     try {
       const response = await employeeService.getEmployeeById(userId);
-      const name = response.data.Name;
+      const name = response.data.name;
       setEmployeeCache((prev) => ({ ...prev, [userId]: name }));
       return name;
     } catch (err) {
@@ -51,60 +51,119 @@ const AttendanceRecordPage: React.FC = () => {
     }
   };
 
+  // Helper function to check if AM Out time is valid (9:00 AM or later)
+  const isValidAmOut = (time: string): boolean => {
+    const hour = parseInt(time.split(":")[0]);
+    return hour >= 9;
+  };
+
+  // Helper function to check if PM Out time is valid (1:00 PM or later)
+  const isValidPmOut = (time: string): boolean => {
+    const hour = parseInt(time.split(":")[0]);
+    return hour >= 13; // 13:00 = 1:00 PM
+  };
+
   // Group attendance records by employee and date
   const groupAttendanceRecords = (
     records: AttendanceWithName[],
   ): GroupedAttendance[] => {
     const grouped: { [key: string]: GroupedAttendance } = {};
 
+    // First, organize records by employee and date
+    const recordsByEmployee: { [key: string]: AttendanceWithName[] } = {};
+
     records.forEach((record) => {
-      // Extract time directly from the GMT string without timezone conversion
-      // Format: "Thu, 15 Jan 2026 10:41:08 GMT"
-      const timeMatch = record.CHECKTIME.match(/\d{2}:\d{2}:\d{2}/);
-      const dateMatch = record.CHECKTIME.match(/\d{2} \w{3} \d{4}/);
+      const timeMatch = record.checktime.match(/\d{2}:\d{2}:\d{2}/);
+      if (!timeMatch) return;
 
-      if (!timeMatch || !dateMatch) return;
-
-      const time = timeMatch[0];
-      const hour = parseInt(time.split(":")[0]);
-      const minute = parseInt(time.split(":")[1]);
-
-      // Parse date for grouping key
-      const date = new Date(record.CHECKTIME);
+      const date = new Date(record.checktime);
       const dateKey = date.toISOString().split("T")[0];
+      const key = `${record.userid}-${dateKey}`;
 
-      const key = `${record.USERID}-${dateKey}`;
+      if (!recordsByEmployee[key]) {
+        recordsByEmployee[key] = [];
+      }
+      recordsByEmployee[key].push(record);
+    });
+
+    // Process each employee's records for the day
+    Object.keys(recordsByEmployee).forEach((key) => {
+      const dayRecords = recordsByEmployee[key];
+      const [userId, dateKey] = key.split("-");
 
       if (!grouped[key]) {
         grouped[key] = {
-          userId: record.USERID,
-          employeeName: record.employeeName || "Unknown",
+          userId: parseInt(userId),
+          employeeName: dayRecords[0].employeeName || "Unknown",
           date: dateKey,
         };
       }
 
-      // Determine if AM (before 12:30 PM) or PM (12:30 PM and after)
-      const isPM = hour > 12 || (hour === 12 && minute >= 30);
+      // Separate AM and PM records
+      const amRecords: {
+        time: string;
+        type: string;
+        record: AttendanceWithName;
+      }[] = [];
+      const pmRecords: {
+        time: string;
+        type: string;
+        record: AttendanceWithName;
+      }[] = [];
 
-      if (record.CHECKTYPE === "I") {
+      dayRecords.forEach((record) => {
+        const timeMatch = record.checktime.match(/\d{2}:\d{2}:\d{2}/);
+        if (!timeMatch) return;
+
+        const time = timeMatch[0];
+        const hour = parseInt(time.split(":")[0]);
+        const minute = parseInt(time.split(":")[1]);
+
+        // Determine if AM (before 12:30 PM) or PM (12:30 PM and after)
+        const isPM = hour > 12 || (hour === 12 && minute >= 30);
+
         if (isPM) {
-          if (!grouped[key].pmCheckIn || time < grouped[key].pmCheckIn!) {
-            grouped[key].pmCheckIn = time;
-          }
+          pmRecords.push({ time, type: record.checktype, record });
         } else {
-          if (!grouped[key].amCheckIn || time < grouped[key].amCheckIn!) {
-            grouped[key].amCheckIn = time;
-          }
+          amRecords.push({ time, type: record.checktype, record });
         }
-      } else if (record.CHECKTYPE === "O") {
-        if (isPM) {
-          if (!grouped[key].pmCheckOut || time > grouped[key].pmCheckOut!) {
-            grouped[key].pmCheckOut = time;
-          }
-        } else {
-          if (!grouped[key].amCheckOut || time > grouped[key].amCheckOut!) {
-            grouped[key].amCheckOut = time;
-          }
+      });
+
+      // Sort records by time
+      amRecords.sort((a, b) => a.time.localeCompare(b.time));
+      pmRecords.sort((a, b) => a.time.localeCompare(b.time));
+
+      // Process AM records
+      const amCheckIns = amRecords.filter((r) => r.type === "I");
+      const amCheckOuts = amRecords.filter((r) => r.type === "O");
+
+      if (amCheckIns.length > 0) {
+        // Get earliest AM check-in
+        grouped[key].amCheckIn = amCheckIns[0].time;
+      }
+
+      if (amCheckOuts.length > 0) {
+        // Find the latest valid AM check-out (9:00 AM or later)
+        const validAmOuts = amCheckOuts.filter((r) => isValidAmOut(r.time));
+        if (validAmOuts.length > 0) {
+          grouped[key].amCheckOut = validAmOuts[validAmOuts.length - 1].time;
+        }
+      }
+
+      // Process PM records
+      const pmCheckIns = pmRecords.filter((r) => r.type === "I");
+      const pmCheckOuts = pmRecords.filter((r) => r.type === "O");
+
+      if (pmCheckIns.length > 0) {
+        // Get earliest PM check-in
+        grouped[key].pmCheckIn = pmCheckIns[0].time;
+      }
+
+      if (pmCheckOuts.length > 0) {
+        // Find the latest valid PM check-out (1:00 PM or later)
+        const validPmOuts = pmCheckOuts.filter((r) => isValidPmOut(r.time));
+        if (validPmOuts.length > 0) {
+          grouped[key].pmCheckOut = validPmOuts[validPmOuts.length - 1].time;
         }
       }
     });
@@ -140,7 +199,7 @@ const AttendanceRecordPage: React.FC = () => {
       const recordsWithNames = await Promise.all(
         records.map(async (record) => ({
           ...record,
-          employeeName: await fetchEmployeeName(record.USERID),
+          employeeName: await fetchEmployeeName(record.userid),
         })),
       );
 

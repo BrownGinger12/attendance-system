@@ -304,23 +304,23 @@ const EmployeePage: React.FC = () => {
                 ) : filteredEmployees.length > 0 ? (
                   filteredEmployees.map((employee) => (
                     <tr
-                      key={employee.USERID}
-                      onClick={() => handleEmployeeClick(employee.USERID)}
+                      key={employee.userid}
+                      onClick={() => handleEmployeeClick(employee.userid)}
                       className="hover:bg-slate-800/50 transition-colors cursor-pointer"
                     >
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">
-                        {employee.Badgenumber}
+                        {employee.badgenumber}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-white font-medium">
-                        {employee.Name}
+                        {employee.name}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">
                         <div className="flex flex-col">
                           <span>
-                            {getDepartmentName(employee.DEFAULTDEPTID)}
+                            {getDepartmentName(employee.defaultdeptid)}
                           </span>
                           <span className="text-xs text-slate-500">
-                            ID: {employee.DEFAULTDEPTID}
+                            ID: {employee.defaultdeptid}
                           </span>
                         </div>
                       </td>

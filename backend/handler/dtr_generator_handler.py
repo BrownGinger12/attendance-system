@@ -1,250 +1,376 @@
+# dtr_generator.py
 from docx import Document
 from docx.shared import Pt
-from datetime import datetime
+from datetime import datetime, date, timedelta
 import calendar
+from gateway.mysql_gateway import fetch_query
+
+
+def get_attendance_from_db(userid, month):
+    """Fetch attendance records from MySQL for a given user and month"""
+    start = datetime.strptime(month + "-01", "%Y-%m-%d")
+    if start.month == 12:
+        end = start.replace(year=start.year + 1, month=1)
+    else:
+        end = start.replace(month=start.month + 1)
+
+    sql = """
+        SELECT userid, checktime, checktype
+        FROM attendance
+        WHERE userid = %s AND checktime >= %s AND checktime < %s
+        ORDER BY checktime ASC
+    """
+    rows = fetch_query(sql, [userid, start, end])
+    return {"name": "", "data": rows}
+
+
+def parse_datetime_flexible(dt_value):
+    """Helper to parse various datetime formats"""
+    if isinstance(dt_value, datetime):
+        return dt_value
+    
+    # Try different datetime formats
+    formats = [
+        '%Y-%m-%d %H:%M:%S',
+        '%a, %d %b %Y %H:%M:%S GMT',  # GMT format from API
+        '%Y-%m-%dT%H:%M:%S',
+        '%Y-%m-%dT%H:%M:%S.%f',
+        '%Y-%m-%dT%H:%M:%S.%fZ',
+    ]
+    
+    for fmt in formats:
+        try:
+            return datetime.strptime(dt_value, fmt)
+        except ValueError:
+            continue
+    
+    # If none of the formats work, raise an error with helpful message
+    raise ValueError(f"Unable to parse datetime: {dt_value}")
+
 
 def parse_attendance_data(json_data):
-    """Parse the JSON attendance data into a structured format with time-based AM/PM classification"""
-    sorted_records = sorted(json_data['data'], 
-                          key=lambda x: datetime.strptime(x['CHECKTIME'], '%a, %d %b %Y %H:%M:%S GMT'))
-    
+    """Parse attendance records into structured AM/PM IN/OUT"""
+    sorted_records = sorted(
+        json_data['data'],
+        key=lambda x: parse_datetime_flexible(x['checktime'])
+    )
+
     attendance = {}
-    
     for record in sorted_records:
-        dt = datetime.strptime(record['CHECKTIME'], '%a, %d %b %Y %H:%M:%S GMT')
+        dt = parse_datetime_flexible(record['checktime'])
         date_key = dt.date()
-        
         if date_key not in attendance:
             attendance[date_key] = {'in': [], 'out': []}
-        
+
         time_str = dt.strftime('%H:%M')
         hour = dt.hour
-        
-        if record['CHECKTYPE'] == 'I':
+
+        if record['checktype'] == 'I':
             attendance[date_key]['in'].append((time_str, hour))
         else:
             attendance[date_key]['out'].append((time_str, hour))
-    
-    # Now classify IN/OUT into AM/PM based on time rules
-    classified_attendance = {}
-    
+
+    # Classify AM/PM - Filter invalid OUT times
+    classified = {}
     for date_key, records in attendance.items():
-        classified_attendance[date_key] = {'in': [], 'out': []}
+        classified[date_key] = {'in': [], 'out': []}
+
+        # AM INs (before 12pm) - accept all
+        am_ins = [(t, h) for t, h in records['in'] if h < 12]
         
-        # Process IN records: if hour < 12, it's AM IN; otherwise PM IN
-        am_ins = [(time, hour) for time, hour in records['in'] if hour < 12]
-        pm_ins = [(time, hour) for time, hour in records['in'] if hour >= 12]
+        # PM INs (12pm or later) - accept all
+        pm_ins = [(t, h) for t, h in records['in'] if h >= 12]
         
-        # Process OUT records: if hour < 13 (1 PM), it's AM OUT; if hour >= 13, it's PM OUT
-        am_outs = [(time, hour) for time, hour in records['out'] if hour < 13]
-        pm_outs = [(time, hour) for time, hour in records['out'] if hour >= 13]
+        # AM OUTs - must be 9am or later AND before 1pm
+        am_outs = []
+        for t, h in records['out']:
+            if h >= 9 and h < 13:  # Between 9am and 12:59pm
+                am_outs.append((t, h))
         
-        # Build final arrays: [AM_IN, PM_IN] and [AM_OUT, PM_OUT]
-        # Take the first AM IN and first PM IN
+        # PM OUTs - must be 1pm or later
+        pm_outs = []
+        for t, h in records['out']:
+            if h >= 13:  # 1pm or later
+                pm_outs.append((t, h))
+
+        # IN - Get first clock-in for AM and PM (accept all)
         if am_ins:
-            classified_attendance[date_key]['in'].append(am_ins[0][0])
+            classified[date_key]['in'].append(am_ins[0][0])
         if pm_ins:
-            # Ensure PM IN is added as second element
             if not am_ins:
-                classified_attendance[date_key]['in'].append('')  # Empty AM IN
-            classified_attendance[date_key]['in'].append(pm_ins[0][0])
-        
-        # Take the first AM OUT and first PM OUT
+                classified[date_key]['in'].append('')
+            classified[date_key]['in'].append(pm_ins[0][0])
+
+        # OUT - Get first VALID clock-out for AM and PM (filtered)
         if am_outs:
-            classified_attendance[date_key]['out'].append(am_outs[0][0])
+            classified[date_key]['out'].append(am_outs[0][0])
         if pm_outs:
-            # Ensure PM OUT is added as second element
             if not am_outs:
-                classified_attendance[date_key]['out'].append('')  # Empty AM OUT
-            classified_attendance[date_key]['out'].append(pm_outs[0][0])
-    
-    return classified_attendance
+                classified[date_key]['out'].append('')
+            classified[date_key]['out'].append(pm_outs[0][0])
+
+    return classified
+
 
 def get_month_weekends(year, month):
-    """Get all Saturday and Sunday dates for a given month with their day names"""
+    """Return all weekends in the month as {day: 'SAT'/'SUN'}"""
     weekends = {}
     cal = calendar.monthcalendar(year, month)
-    
     for week in cal:
         if week[calendar.SATURDAY] != 0:
             weekends[week[calendar.SATURDAY]] = 'SAT'
         if week[calendar.SUNDAY] != 0:
             weekends[week[calendar.SUNDAY]] = 'SUN'
-    
     return weekends
 
-def calculate_undertime(attendance_record, expected_am_hours=4, expected_pm_hours=4):
-    """
-    Calculate undertime based on actual work hours vs expected hours
-    AM: Expected 4 hours (08:00-12:00)
-    PM: Expected 4 hours (13:00-17:00)
-    Returns tuple: (undertime_hours, undertime_minutes)
-    """
-    total_undertime_minutes = 0
-    
-    # Calculate AM work hours (if both AM in and AM out exist)
-    if attendance_record['in'] and attendance_record['out']:
-        try:
-            am_in = datetime.strptime(attendance_record['in'][0], '%H:%M')
-            am_out = datetime.strptime(attendance_record['out'][0], '%H:%M')
-            am_worked = (am_out - am_in).total_seconds() / 60
-            am_expected = expected_am_hours * 60
-            am_undertime = max(0, am_expected - am_worked)
-            total_undertime_minutes += am_undertime
-        except (IndexError, ValueError, TypeError):
-            pass
-    
-    # Calculate PM work hours (if both PM in and PM out exist)
-    if len(attendance_record['in']) > 1 and len(attendance_record['out']) > 1:
-        try:
-            pm_in = datetime.strptime(attendance_record['in'][1], '%H:%M')
-            pm_out = datetime.strptime(attendance_record['out'][1], '%H:%M')
-            pm_worked = (pm_out - pm_in).total_seconds() / 60
-            pm_expected = expected_pm_hours * 60
-            pm_undertime = max(0, pm_expected - pm_worked)
-            total_undertime_minutes += pm_undertime
-        except (IndexError, ValueError, TypeError):
-            pass
-    
-    undertime_hours = int(total_undertime_minutes // 60)
-    undertime_minutes = int(total_undertime_minutes % 60)
-    
-    return undertime_hours, undertime_minutes
 
-def fill_dtr_document(template_path, json_data):
+def calculate_undertime(record, expected_am_hours=4, expected_pm_hours=4):
     """
-    Fill the DTR document with attendance data using placeholders
+    Calculate undertime for AM/PM
+    Business rules:
+    - Accept all IN times (already filtered in parse_attendance_data)
+    - OUT times already filtered (AM out >= 9am, PM out >= 1pm)
+    - Lunch: 12pm-1pm (excluded from calculation)
+    """
+    total_minutes = 0
     
-    Args:
-        template_path (str): Path to the template DOCX file
-        json_data (dict): JSON data containing 'name' and 'data' fields
-        
-    Returns:
-        tuple: (Document object, employee_name, month_name, attendance_days)
+    # AM shift
+    if record['in'] and record['out']:
+        try:
+            am_in = datetime.strptime(record['in'][0], '%H:%M')
+            am_out = datetime.strptime(record['out'][0], '%H:%M')
+            
+            # If out time is during lunch (12:00-12:59), cap it at 12:00
+            if am_out.hour == 12:
+                am_out = am_out.replace(hour=12, minute=0)
+            
+            am_worked = (am_out - am_in).total_seconds() / 60
+            
+            # Subtract lunch time if clock out overlaps with lunch
+            if am_out.hour == 12 and am_in.hour < 12:
+                lunch_overlap = am_out.minute
+                am_worked -= lunch_overlap
+            
+            am_undertime = max(0, expected_am_hours*60 - am_worked)
+            total_minutes += am_undertime
+        except:
+            pass
+    
+    # PM shift
+    if len(record['in']) > 1 and len(record['out']) > 1:
+        try:
+            pm_in = datetime.strptime(record['in'][1], '%H:%M')
+            pm_out = datetime.strptime(record['out'][1], '%H:%M')
+            
+            # If in time is during lunch (12:00-12:59), adjust to 1:00pm
+            if pm_in.hour == 12:
+                pm_in = pm_in.replace(hour=13, minute=0)
+            
+            pm_worked = (pm_out - pm_in).total_seconds() / 60
+            
+            # Don't count any lunch break time (12pm-1pm)
+            if pm_in.hour == 12:
+                lunch_time = (13 - 12) * 60 - pm_in.minute
+                pm_worked -= lunch_time
+            
+            pm_undertime = max(0, expected_pm_hours*60 - pm_worked)
+            total_minutes += pm_undertime
+        except:
+            pass
+
+    hours = int(total_minutes // 60)
+    minutes = int(total_minutes % 60)
+    return hours, minutes
+
+
+def fill_dtr_document_from_data(template_path, json_data, employee_name=''):
+    """
+    Fill DTR DOCX template using provided attendance data (no database fetch)
+    json_data should be: {"name": "...", "data": [attendance records]}
     """
     doc = Document(template_path)
-    
+    json_data['name'] = employee_name
+
     attendance = parse_attendance_data(json_data)
-    
+
+    # Determine year/month names
     if json_data['data']:
-        first_date = datetime.strptime(json_data['data'][0]['CHECKTIME'], 
-                                      '%a, %d %b %Y %H:%M:%S GMT')
-        month = first_date.month
-        year = first_date.year
-        month_name = first_date.strftime('%B %Y')
+        first_dt = parse_datetime_flexible(json_data['data'][0]['checktime'])
+        year, month_num = first_dt.year, first_dt.month
     else:
         now = datetime.now()
-        month = now.month
-        year = now.year
-        month_name = now.strftime('%B %Y')
+        year, month_num = now.year, now.month
+    month_name = datetime(year, month_num, 1).strftime('%B %Y')
+
+    weekends = get_month_weekends(year, month_num)
     
-    weekends = get_month_weekends(year, month)
-    employee_name = json_data['name'].upper()
+    # Get the maximum day in this month
+    max_day_in_month = calendar.monthrange(year, month_num)[1]
     
-    # Calculate total undertime
-    total_undertime_hours = 0
-    total_undertime_minutes = 0
-    
+    # Convert name to uppercase for display
+    employee_name_upper = employee_name.upper()
+
+    # Total undertime
+    total_hours = total_minutes = 0
     for date_obj, record in attendance.items():
         uh, um = calculate_undertime(record)
-        total_undertime_hours += uh
-        total_undertime_minutes += um
-    
-    total_undertime_hours += total_undertime_minutes // 60
-    total_undertime_minutes = total_undertime_minutes % 60
-    
-    # Process all paragraphs
-    for paragraph in doc.paragraphs:
-        if '[name]' in paragraph.text:
-            paragraph.text = paragraph.text.replace('[name]', employee_name)
-        if '[month]' in paragraph.text:
-            paragraph.text = paragraph.text.replace('[month]', month_name)
-        if '[toth]' in paragraph.text:
-            paragraph.text = paragraph.text.replace('[toth]', str(total_undertime_hours))
-        if '[totm]' in paragraph.text:
-            paragraph.text = paragraph.text.replace('[totm]', str(total_undertime_minutes))
-    
-    # Process all tables
+        total_hours += uh
+        total_minutes += um
+    total_hours += total_minutes // 60
+    total_minutes = total_minutes % 60
+
+    for table in doc.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                for paragraph in cell.paragraphs:
+                    for run in paragraph.runs:
+                        run.text = run.text.replace('[name]', employee_name_upper)\
+                                        .replace('[month]', month_name)\
+                                        .replace('[toth]', str(total_hours))\
+                                        .replace('[totm]', str(total_minutes))
+
+    # Fill tables
     for table in doc.tables:
         for row in table.rows:
             for cell in row.cells:
                 text = cell.text
-                
-                if '[name]' in text:
-                    text = text.replace('[name]', employee_name)
-                if '[month]' in text:
-                    text = text.replace('[month]', month_name)
-                if '[toth]' in text:
-                    text = text.replace('[toth]', str(total_undertime_hours))
-                if '[totm]' in text:
-                    text = text.replace('[totm]', str(total_undertime_minutes))
-                
-                # Process attendance placeholders
                 for day in range(1, 32):
-                    date_obj = None
-                    try:
-                        date_obj = datetime(year, month, day).date()
-                    except ValueError:
+                    # Skip days that don't exist in this month (leave placeholders blank)
+                    if day > max_day_in_month:
+                        placeholders = {
+                            f'[aa{day}]': '', f'[da{day}]': '', f'[ap{day}]': '', f'[dp{day}]': '',
+                            f'[uh{day}]': '', f'[m{day}]': ''
+                        }
+                        for ph, val in placeholders.items():
+                            text = text.replace(ph, val)
                         continue
                     
+                    try:
+                        date_obj = datetime(year, month_num, day).date()
+                    except ValueError:
+                        continue
+
                     is_weekend = day in weekends
                     weekend_label = weekends.get(day, '')
-                    
-                    aa_placeholder = f'[aa{day}]'  # AM Arrival
-                    da_placeholder = f'[da{day}]'  # AM Departure
-                    ap_placeholder = f'[ap{day}]'  # PM Arrival
-                    dp_placeholder = f'[dp{day}]'  # PM Departure
-                    uh_placeholder = f'[uh{day}]'  # Undertime Hours
-                    m_placeholder = f'[m{day}]'    # Undertime Minutes
-                    
-                    if any(p in text for p in [aa_placeholder, da_placeholder, ap_placeholder, 
-                                               dp_placeholder, uh_placeholder, m_placeholder]):
-                        
-                        if is_weekend:
-                            text = text.replace(aa_placeholder, weekend_label)
-                            text = text.replace(da_placeholder, '')
-                            text = text.replace(ap_placeholder, '')
-                            text = text.replace(dp_placeholder, '')
-                            text = text.replace(uh_placeholder, '')
-                            text = text.replace(m_placeholder, '')
-                        elif date_obj in attendance:
-                            record = attendance[date_obj]
-                            
-                            # AM Arrival - first IN
-                            if aa_placeholder in text:
-                                value = record['in'][0] if record['in'] else ''
-                                text = text.replace(aa_placeholder, value)
-                            
-                            # AM Departure - first OUT
-                            if da_placeholder in text:
-                                value = record['out'][0] if record['out'] else ''
-                                text = text.replace(da_placeholder, value)
-                            
-                            # PM Arrival - second IN
-                            if ap_placeholder in text:
-                                value = record['in'][1] if len(record['in']) > 1 else ''
-                                text = text.replace(ap_placeholder, value)
-                            
-                            # PM Departure - second OUT
-                            if dp_placeholder in text:
-                                value = record['out'][1] if len(record['out']) > 1 else ''
-                                text = text.replace(dp_placeholder, value)
-                            
-                            uh, um = calculate_undertime(record)
-                            text = text.replace(uh_placeholder, str(uh) if uh > 0 else '')
-                            text = text.replace(m_placeholder, str(um) if um > 0 else '')
-                        else:
-                            text = text.replace(aa_placeholder, '')
-                            text = text.replace(da_placeholder, '')
-                            text = text.replace(ap_placeholder, '')
-                            text = text.replace(dp_placeholder, '')
-                            text = text.replace(uh_placeholder, '')
-                            text = text.replace(m_placeholder, '')
-                
+
+                    placeholders = {
+                        f'[aa{day}]': '', f'[da{day}]': '', f'[ap{day}]': '', f'[dp{day}]': '',
+                        f'[uh{day}]': '', f'[m{day}]': ''
+                    }
+
+                    if is_weekend:
+                        placeholders[f'[aa{day}]'] = weekend_label
+                    elif date_obj in attendance:
+                        record = attendance[date_obj]
+                        placeholders[f'[aa{day}]'] = record['in'][0] if record['in'] else ''
+                        placeholders[f'[da{day}]'] = record['out'][0] if record['out'] else ''
+                        placeholders[f'[ap{day}]'] = record['in'][1] if len(record['in']) > 1 else ''
+                        placeholders[f'[dp{day}]'] = record['out'][1] if len(record['out']) > 1 else ''
+                        uh, um = calculate_undertime(record)
+                        placeholders[f'[uh{day}]'] = str(uh) if uh > 0 else ''
+                        placeholders[f'[m{day}]'] = str(um) if um > 0 else ''
+
+                    for ph, val in placeholders.items():
+                        text = text.replace(ph, val)
+
                 cell.text = text
-                
                 for paragraph in cell.paragraphs:
                     for run in paragraph.runs:
                         run.font.size = Pt(6)
+
+    return doc, employee_name_upper, month_name, len(attendance)
+
+
+def fill_dtr_document(template_path, userid, month, employee_name=''):
+    """
+    Fill DTR DOCX template for a specific user and month
+    """
+    doc = Document(template_path)
+    json_data = get_attendance_from_db(userid, month)
+    json_data['name'] = employee_name
+
+    attendance = parse_attendance_data(json_data)
+
+    # Determine year/month names
+    if json_data['data']:
+        first_dt = parse_datetime_flexible(json_data['data'][0]['checktime'])
+        year, month_num = first_dt.year, first_dt.month
+    else:
+        now = datetime.now()
+        year, month_num = now.year, now.month
+    month_name = datetime(year, month_num, 1).strftime('%B %Y')
+
+    weekends = get_month_weekends(year, month_num)
     
-    return doc, employee_name, month_name, len(attendance)
+    # Get the maximum day in this month
+    max_day_in_month = calendar.monthrange(year, month_num)[1]
+    
+    # Convert name to uppercase for display
+    employee_name_upper = employee_name.upper()
+
+    # Total undertime
+    total_hours = total_minutes = 0
+    for date_obj, record in attendance.items():
+        uh, um = calculate_undertime(record)
+        total_hours += uh
+        total_minutes += um
+    total_hours += total_minutes // 60
+    total_minutes = total_minutes % 60
+
+    # Fill paragraphs
+    for paragraph in doc.paragraphs:
+        paragraph.text = paragraph.text.replace('[name]', employee_name_upper)\
+                                       .replace('[month]', month_name)\
+                                       .replace('[toth]', str(total_hours))\
+                                       .replace('[totm]', str(total_minutes))
+
+    # Fill tables
+    for table in doc.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                text = cell.text
+                for day in range(1, 32):
+                    # Skip days that don't exist in this month (leave placeholders blank)
+                    if day > max_day_in_month:
+                        placeholders = {
+                            f'[aa{day}]': '', f'[da{day}]': '', f'[ap{day}]': '', f'[dp{day}]': '',
+                            f'[uh{day}]': '', f'[m{day}]': ''
+                        }
+                        for ph, val in placeholders.items():
+                            text = text.replace(ph, val)
+                        continue
+                    
+                    try:
+                        date_obj = datetime(year, month_num, day).date()
+                    except ValueError:
+                        continue
+
+                    is_weekend = day in weekends
+                    weekend_label = weekends.get(day, '')
+
+                    placeholders = {
+                        f'[aa{day}]': '', f'[da{day}]': '', f'[ap{day}]': '', f'[dp{day}]': '',
+                        f'[uh{day}]': '', f'[m{day}]': ''
+                    }
+
+                    if is_weekend:
+                        placeholders[f'[aa{day}]'] = weekend_label
+                    elif date_obj in attendance:
+                        record = attendance[date_obj]
+                        placeholders[f'[aa{day}]'] = record['in'][0] if record['in'] else ''
+                        placeholders[f'[da{day}]'] = record['out'][0] if record['out'] else ''
+                        placeholders[f'[ap{day}]'] = record['in'][1] if len(record['in']) > 1 else ''
+                        placeholders[f'[dp{day}]'] = record['out'][1] if len(record['out']) > 1 else ''
+                        uh, um = calculate_undertime(record)
+                        placeholders[f'[uh{day}]'] = str(uh) if uh > 0 else ''
+                        placeholders[f'[m{day}]'] = str(um) if um > 0 else ''
+
+                    for ph, val in placeholders.items():
+                        text = text.replace(ph, val)
+
+                cell.text = text
+                for paragraph in cell.paragraphs:
+                    for run in paragraph.runs:
+                        run.font.size = Pt(6)
+
+    return doc, employee_name_upper, month_name, len(attendance)

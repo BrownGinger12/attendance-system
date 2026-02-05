@@ -1,103 +1,106 @@
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional
 from datetime import datetime
-from gateway.microsoft_db_gateway import fetch_query
+from gateway.mysql_gateway import fetch_query
 
 class AttendanceRecord(BaseModel):
-    USERID: int
-    CHECKTIME: datetime
-    CHECKTYPE: str
-    VERIFYCODE: Optional[int] = None
-    SENSORID: Optional[str] = None
-    Memoinfo: Optional[str] = None
-    WorkCode: Optional[str] = None
+    id: Optional[int] = None
+    userid: int
+    checktime: datetime
+    checktype: Optional[str] = None
+    verifycode: Optional[int] = None
+    sensorid: Optional[str] = None
     sn: Optional[str] = None
-    UserExtFmt: Optional[int] = None
 
     # --------------------------
-    # Get attendance for a specific month (all employees)
-    # month in "YYYY-MM" format
+    # Get attendance for a specific month (YYYY-MM)
     # --------------------------
     @staticmethod
     def get_month(month: str):
         try:
-            sql = f"""
+            start = datetime.strptime(month + "-01", "%Y-%m-%d")
+            if start.month == 12:
+                end = start.replace(year=start.year + 1, month=1)
+            else:
+                end = start.replace(month=start.month + 1)
+
+            sql = """
             SELECT *
-            FROM [CHECKINOUT]
-            WHERE FORMAT(CHECKTIME, 'yyyy-MM') = '{month}'
-            ORDER BY CHECKTIME DESC
+            FROM attendance
+            WHERE checktime >= %s AND checktime < %s
+            ORDER BY checktime DESC
             """
-            rows = fetch_query(sql)
-            return {"statusCode": 200, "count": len(rows), "data": rows} if rows else {"statusCode": 404, "message": "No attendance found for this month"}
+            rows = fetch_query(sql, [start, end])
+            return {"statusCode": 200, "count": len(rows), "data": rows} if rows else {
+                "statusCode": 404,
+                "message": "No attendance found for this month"
+            }
         except Exception as e:
             return {"statusCode": 500, "message": str(e)}
 
     # --------------------------
-    # Get attendance for a specific day (all employees)
-    # date_str in "YYYY-MM-DD" format
+    # Get attendance for a specific day (YYYY-MM-DD)
     # --------------------------
     @staticmethod
     def get_day(date_str: str):
         try:
-            sql = f"""
+            day = datetime.strptime(date_str, "%Y-%m-%d")
+            next_day = day.replace(day=day.day + 1)
+
+            sql = """
             SELECT *
-            FROM [CHECKINOUT]
-            WHERE FORMAT(CHECKTIME, 'yyyy-MM-dd') = '{date_str}'
-            ORDER BY CHECKTIME DESC
+            FROM attendance
+            WHERE checktime >= %s AND checktime < %s
+            ORDER BY checktime DESC
             """
-            rows = fetch_query(sql)
-            return {"statusCode": 200, "count": len(rows), "data": rows} if rows else {"statusCode": 404, "message": f"No attendance found for {date_str}"}
+            rows = fetch_query(sql, [day, next_day])
+            return {"statusCode": 200, "count": len(rows), "data": rows} if rows else {
+                "statusCode": 404,
+                "message": f"No attendance found for {date_str}"
+            }
         except Exception as e:
             return {"statusCode": 500, "message": str(e)}
 
     # --------------------------
     # Get attendance of a specific employee
-    # Optional month or day filter
     # --------------------------
     @staticmethod
     def get_by_employee(user_id: int, month: Optional[str] = None, day: Optional[str] = None):
         try:
+            params = [user_id]
+            sql = "SELECT * FROM attendance WHERE userid = %s"
+
             if month:
-                sql = f"""
-                SELECT *
-                FROM [CHECKINOUT]
-                WHERE USERID = {user_id} AND FORMAT(CHECKTIME, 'yyyy-MM') = '{month}'
-                ORDER BY CHECKTIME DESC
-                """
+                start = datetime.strptime(month + "-01", "%Y-%m-%d")
+                end = start.replace(month=start.month % 12 + 1, year=start.year + (start.month // 12))
+                sql += " AND checktime >= %s AND checktime < %s"
+                params.extend([start, end])
+
             elif day:
-                sql = f"""
-                SELECT *
-                FROM [CHECKINOUT]
-                WHERE USERID = {user_id} AND FORMAT(CHECKTIME, 'yyyy-MM-dd') = '{day}'
-                ORDER BY CHECKTIME DESC
-                """
-            else:
-                sql = f"""
-                SELECT *
-                FROM [CHECKINOUT]
-                WHERE USERID = {user_id}
-                ORDER BY CHECKTIME DESC
-                """
-            rows = fetch_query(sql)
-            return {"statusCode": 200, "count": len(rows), "data": rows} if rows else {"statusCode": 404, "message": f"No attendance found for USERID {user_id}"}
+                day_dt = datetime.strptime(day, "%Y-%m-%d")
+                next_day = day_dt.replace(day=day_dt.day + 1)
+                sql += " AND checktime >= %s AND checktime < %s"
+                params.extend([day_dt, next_day])
+
+            sql += " ORDER BY checktime DESC"
+            rows = fetch_query(sql, params)
+
+            return {"statusCode": 200, "count": len(rows), "data": rows} if rows else {
+                "statusCode": 404,
+                "message": f"No attendance found for USERID {user_id}"
+            }
+
         except Exception as e:
             return {"statusCode": 500, "message": str(e)}
-        
+
+    # --------------------------
+    # REALTIME polling (Watcher-safe)
+    # --------------------------
     @staticmethod
     def get_after(after_time: datetime):
-        """
-        Get all attendance records of today after the given datetime.
-        """
         try:
-            today_str = datetime.now().strftime("%Y-%m-%d")
-            sql = """
-            SELECT *
-            FROM [CHECKINOUT]
-            WHERE FORMAT(CHECKTIME, 'yyyy-MM-dd') = ? AND CHECKTIME > ?
-            ORDER BY CHECKTIME ASC
-            """
-            rows = fetch_query(sql, [today_str, after_time])
-            return rows or []
+            sql = "SELECT * FROM attendance WHERE checktime > %s ORDER BY checktime ASC"
+            return fetch_query(sql, [after_time]) or []
         except Exception as e:
             print("Attendance watcher error:", e)
             return []

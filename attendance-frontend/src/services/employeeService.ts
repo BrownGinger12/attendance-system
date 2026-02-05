@@ -1,10 +1,10 @@
 import apiClient from "../client/axiosClient";
 
 export interface Employee {
-  USERID: number;
-  Name: string;
-  Badgenumber: string;
-  DEFAULTDEPTID: number;
+  userid: number;
+  name: string;
+  badgenumber: string;
+  defaultdeptid: number;
   FingerprintCount?: number;
   // Add other fields as needed
 }
@@ -17,22 +17,23 @@ export interface Department {
 }
 
 export interface AttendanceRecord {
-  CHECKTIME: string;
-  CHECKTYPE: string;
-  USERID: number;
-  SENSORID: string;
-  VERIFYCODE: number;
-  WorkCode: string;
+  id: number;
+  checktime: string;
+  checktype: string;
+  userid: number;
+  sensorid: string;
+  verifycode: number;
   sn: string;
-  Memoinfo: string | null;
-  UserExtFmt: number;
+  WorkCode?: string;
+  Memoinfo?: string | null;
+  UserExtFmt?: number;
 }
 
 export interface EmployeeDetail {
-  USERID: number;
-  Name: string;
-  Badgenumber: string;
-  DEFAULTDEPTID: number;
+  userid: number;
+  name: string;
+  badgenumber: string;
+  defaultdeptid: number;
   PHOTO: string | null;
   ATT: number;
   AccGroup: number;
@@ -80,6 +81,7 @@ export interface EmployeeDetail {
   mverifypass: string | null;
   privilege: number;
   street: string | null;
+  schedule_type?: string;
 }
 
 export interface EmployeesResponse {
@@ -195,7 +197,7 @@ export const employeeService = {
   // Get employee by ID
   getEmployeeById: async (userId: number): Promise<EmployeeDetailResponse> => {
     const response = await apiClient.get<EmployeeDetailResponse>(
-      `/employees/${userId}`,
+      `/employee/${userId}`,
     );
     return response.data;
   },

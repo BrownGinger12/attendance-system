@@ -1,15 +1,12 @@
 # app.py
+from flask import Flask, request, jsonify, send_file
+from flask_cors import CORS
+from flask_socketio import SocketIO, emit
 import os
 import threading
 from datetime import datetime, date, time as dtime
 
-from flask import Flask, request, jsonify, send_file
-from flask_cors import CORS
-from flask_socketio import SocketIO, emit
-import pyodbc
-from dotenv import load_dotenv
-
-from handler.dtr_generator_handler import fill_dtr_document
+from handler.dtr_generator_handler import fill_dtr_document, fill_dtr_document_from_data
 from handler.employee_handler import (
     delete_employee,
     export_employees_to_excel,
@@ -30,17 +27,11 @@ from handler.department_handler import get_departments, get_department_by_id
 from handler.attendance_watcher_handler import AttendanceWatcher
 
 # ------------------------------
-# Load env and DB config
-# ------------------------------
-load_dotenv()
-DB_PATH = os.getenv("ACCESS_DB_PATH")
-DRIVER = "Microsoft Access Driver (*.mdb, *.accdb)"
-
-# ------------------------------
 # Flask + SocketIO setup
 # ------------------------------
 app = Flask(__name__)
 CORS(app)
+
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 ATTENDANCE_NS = '/attendance'
 
@@ -48,6 +39,8 @@ ATTENDANCE_NS = '/attendance'
 # Attendance Watcher
 # ------------------------------
 watcher = AttendanceWatcher(socketio, namespace=ATTENDANCE_NS)
+
+# Start watcher in a separate daemon thread
 threading.Thread(target=watcher.start, daemon=True).start()
 
 # ------------------------------
@@ -58,12 +51,22 @@ def on_connect():
     print("Attendance socket connected")
     emit("status", {"message": "Connected to attendance namespace"})
 
-    # Send today's attendance on connect
-    rows = watcher.get_today_attendance()
-    for r in rows:
-        if isinstance(r.get("CHECKTIME"), datetime):
-            r["CHECKTIME"] = r["CHECKTIME"].isoformat()
-    emit("attendance:init", rows)
+    try:
+        # Fetch today's attendance from SQL
+        rows = watcher.get_today_attendance()
+
+        # Convert CHECKTIME to ISO string for all rows
+        for r in rows:
+            if isinstance(r.get("checktime"), datetime):
+                r["checktime"] = r["checktime"].isoformat()
+
+        # Emit all today's attendance to the client
+        emit("attendance:init", rows)
+        print(f"Sent {len(rows)} attendance records to client.")
+
+    except Exception as e:
+        print("Error fetching today's attendance:", e)
+        emit("attendance:init", [])
 
 @socketio.on('disconnect', namespace=ATTENDANCE_NS)
 def on_disconnect():
@@ -135,8 +138,10 @@ def attendance_day():
     return get_attendance_day()
 
 # ------------------------------
-# DTR Export
+# DTR Export endpoint
 # ------------------------------
+# FIXED API ROUTE - Replace your existing /api/fill-dtr-json endpoint with this:
+
 @app.route('/api/fill-dtr-json', methods=['POST'])
 def fill_dtr_json():
     try:
@@ -148,7 +153,14 @@ def fill_dtr_json():
         if not os.path.exists(template_path):
             return jsonify({'error': f'Template not found: {template_path}'}), 404
 
-        filled_doc, employee_name, month_name, attendance_days = fill_dtr_document(template_path, json_data)
+        employee_name = json_data.get('name', 'Unknown')
+
+        # Use the new function that accepts data directly
+        filled_doc, employee_name, month_name, attendance_days = fill_dtr_document_from_data(
+            template_path, 
+            json_data,
+            employee_name
+        )
 
         from io import BytesIO
         doc_buffer = BytesIO()
@@ -164,10 +176,12 @@ def fill_dtr_json():
             download_name=output_filename
         )
     except Exception as e:
+        import traceback
+        print(traceback.format_exc())  # This will help debug
         return jsonify({'error': str(e)}), 500
 
 # ------------------------------
-# Run app
+# Run the app
 # ------------------------------
 if __name__ == "__main__":
-    socketio.run(app, debug=False, use_reloader=False, host="0.0.0.0", port=5000)
+    socketio.run(app, debug=True, host="0.0.0.0", port=5000)

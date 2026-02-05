@@ -1,52 +1,59 @@
+# handler/attendance_watcher_handler.py
 from datetime import datetime, date, time as dtime
-import time
 from model.attendance_records import AttendanceRecord
 
 class AttendanceWatcher:
+    """
+    Attendance watcher compatible with app.py structure.
+    No polling: records should be pushed via emit_new_record().
+    """
+
     def __init__(self, socketio, interval: int = 2, namespace='/attendance'):
         self.socketio = socketio
-        self.interval = interval
+        self.interval = interval  # kept for compatibility
         self.namespace = namespace
         self.last_checktime: datetime | None = None
         self.running = False
 
     def start(self):
+        """
+        Placeholder for compatibility.
+        In original code, this started a poll loop.
+        Here, we just mark the watcher as running.
+        """
         self.running = True
-        self._loop()
+        print("AttendanceWatcher ready. Use emit_new_record() to push data.")
 
     def get_today_attendance(self):
+        """
+        Return today's attendance records from SQL (used on WebSocket connect).
+        """
         today_start = datetime.combine(date.today(), dtime.min)
         return AttendanceRecord.get_after(today_start)
 
+    def emit_new_record(self, record: dict):
+        """
+        Push a single new attendance record to clients.
+        """
+        if isinstance(record.get("checktime"), datetime):
+            record["checktime"] = record["checktime"].isoformat()
+
+        self.socketio.emit(
+            'new_attendance',
+            record,
+            namespace=self.namespace
+        )
+
+    def emit_bulk_records(self, records: list[dict]):
+        """
+        Push multiple records at once.
+        """
+        for record in records:
+            self.emit_new_record(record)
+
     def _loop(self):
-        while self.running:
-            try:
-                if self.last_checktime is None:
-                    # Initialize to latest record today
-                    rows = self.get_today_attendance()
-                    if rows:
-                        self.last_checktime = rows[-1]["CHECKTIME"]
-                    time.sleep(self.interval)
-                    continue
-
-                # Get new records after last_checktime
-                records = AttendanceRecord.get_after(self.last_checktime)
-
-                for record in records:
-                    self.last_checktime = record["CHECKTIME"]
-
-                    # Convert CHECKTIME to ISO string
-                    if isinstance(record.get("CHECKTIME"), datetime):
-                        record["CHECKTIME"] = record["CHECKTIME"].isoformat()
-
-                    # Emit to client
-                    self.socketio.emit(
-                        'new_attendance',
-                        record,
-                        namespace=self.namespace
-                    )
-
-            except Exception as e:
-                print("Attendance watcher error:", e)
-
-            time.sleep(self.interval)
+        """
+        Placeholder to preserve structure.
+        No polling is done here.
+        """
+        print("AttendanceWatcher _loop() called (no polling).")

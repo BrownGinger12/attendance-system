@@ -1,9 +1,9 @@
 export interface AttendanceLog {
-  USERID: number;
-  CHECKTIME: string;
-  CHECKTYPE: string;
-  VERIFYCODE?: number;
-  SENSORID?: string;
+  userid: number;
+  checktime: string;
+  checktype: string;
+  verifycode?: number;
+  sensorid?: string;
   Memoinfo?: string;
   WorkCode?: string | null;
   sn?: string | null;
@@ -12,7 +12,7 @@ export interface AttendanceLog {
 }
 
 export interface EmployeeAttendance {
-  USERID: number;
+  userid: number;
   employeeName: string;
   amCheckIn?: AttendanceLog;
   amCheckOut?: AttendanceLog;
@@ -63,76 +63,114 @@ export const processAttendanceLogs = (
   today.setHours(0, 0, 0, 0);
 
   const todayLogs = allLogs.filter((log) => {
-    const logDate = new Date(log.CHECKTIME);
+    const logDate = new Date(log.checktime);
     logDate.setHours(0, 0, 0, 0);
     return logDate.getTime() === today.getTime();
   });
 
+  // Group logs by user
+  const logsByUser: { [key: number]: AttendanceLog[] } = {};
   todayLogs.forEach((log) => {
-    const userId = log.USERID;
-    const logDate = new Date(log.CHECKTIME);
-    const hour = logDate.getHours();
-    const minutes = logDate.getMinutes();
+    if (!logsByUser[log.userid]) {
+      logsByUser[log.userid] = [];
+    }
+    logsByUser[log.userid].push(log);
+  });
 
-    // AM period: before 12:30 PM (up to 12:29 PM)
-    // PM period: 12:30 PM and after
-    const isAM = hour < 12 || (hour === 12 && minutes < 30);
+  // Process each user's logs
+  Object.keys(logsByUser).forEach((userIdStr) => {
+    const userId = parseInt(userIdStr);
+    const userLogs = logsByUser[userId];
 
     if (!attendanceMap.has(userId)) {
       attendanceMap.set(userId, {
-        USERID: userId,
-        employeeName: log.employeeName || "Unknown",
+        userid: userId,
+        employeeName: userLogs[0].employeeName || "Unknown",
         isLate: false,
       });
     }
 
     const employee = attendanceMap.get(userId)!;
 
-    if (log.CHECKTYPE === "I") {
-      // Check In
+    // Separate AM and PM logs
+    const amLogs: AttendanceLog[] = [];
+    const pmLogs: AttendanceLog[] = [];
+
+    userLogs.forEach((log) => {
+      const logDate = new Date(log.checktime);
+      const hour = logDate.getHours();
+      const minutes = logDate.getMinutes();
+
+      // AM period: before 12:30 PM (up to 12:29 PM)
+      // PM period: 12:30 PM and after
+      const isAM = hour < 12 || (hour === 12 && minutes < 30);
+
       if (isAM) {
-        // AM Check In - keep earliest
-        if (
-          !employee.amCheckIn ||
-          new Date(log.CHECKTIME) < new Date(employee.amCheckIn.CHECKTIME)
-        ) {
-          employee.amCheckIn = log;
-          // Check if late for AM shift
-          if (isLateCheckIn(log.CHECKTIME)) {
-            employee.isLate = true;
-          }
-        }
+        amLogs.push(log);
       } else {
-        // PM Check In - keep earliest
-        if (
-          !employee.pmCheckIn ||
-          new Date(log.CHECKTIME) < new Date(employee.pmCheckIn.CHECKTIME)
-        ) {
-          employee.pmCheckIn = log;
-          // Check if late for PM shift
-          if (isLateCheckIn(log.CHECKTIME)) {
-            employee.isLate = true;
-          }
-        }
+        pmLogs.push(log);
       }
-    } else if (log.CHECKTYPE === "O") {
-      // Check Out
-      if (isAM) {
-        // AM Check Out - keep latest
-        if (
-          !employee.amCheckOut ||
-          new Date(log.CHECKTIME) > new Date(employee.amCheckOut.CHECKTIME)
-        ) {
-          employee.amCheckOut = log;
-        }
-      } else {
-        // PM Check Out - keep latest
-        if (
-          !employee.pmCheckOut ||
-          new Date(log.CHECKTIME) > new Date(employee.pmCheckOut.CHECKTIME)
-        ) {
-          employee.pmCheckOut = log;
-        }
+    });
+
+    // Sort logs by time
+    amLogs.sort(
+      (a, b) =>
+        new Date(a.checktime).getTime() - new Date(b.checktime).getTime(),
+    );
+    pmLogs.sort(
+      (a, b) =>
+        new Date(a.checktime).getTime() - new Date(b.checktime).getTime(),
+    );
+
+    // Process AM logs
+    const amCheckIns = amLogs.filter((log) => log.checktype === "I");
+    const amCheckOuts = amLogs.filter((log) => log.checktype === "O");
+
+    if (amCheckIns.length > 0) {
+      // Get earliest AM check-in
+      employee.amCheckIn = amCheckIns[0];
+      // Check if late for AM shift
+      if (isLateCheckIn(amCheckIns[0].checktime)) {
+        employee.isLate = true;
+      }
+    }
+
+    if (amCheckOuts.length > 0) {
+      // Find the latest valid AM check-out (9:00 AM or later)
+      const validAmOuts = amCheckOuts.filter((log) => {
+        const logDate = new Date(log.checktime);
+        const hour = logDate.getHours();
+        return hour >= 9;
+      });
+
+      if (validAmOuts.length > 0) {
+        employee.amCheckOut = validAmOuts[validAmOuts.length - 1];
+      }
+    }
+
+    // Process PM logs
+    const pmCheckIns = pmLogs.filter((log) => log.checktype === "I");
+    const pmCheckOuts = pmLogs.filter((log) => log.checktype === "O");
+
+    if (pmCheckIns.length > 0) {
+      // Get earliest PM check-in
+      employee.pmCheckIn = pmCheckIns[0];
+      // Check if late for PM shift
+      if (isLateCheckIn(pmCheckIns[0].checktime)) {
+        employee.isLate = true;
+      }
+    }
+
+    if (pmCheckOuts.length > 0) {
+      // Find the latest valid PM check-out (1:00 PM or later)
+      const validPmOuts = pmCheckOuts.filter((log) => {
+        const logDate = new Date(log.checktime);
+        const hour = logDate.getHours();
+        return hour >= 13; // 13:00 = 1:00 PM
+      });
+
+      if (validPmOuts.length > 0) {
+        employee.pmCheckOut = validPmOuts[validPmOuts.length - 1];
       }
     }
   });
