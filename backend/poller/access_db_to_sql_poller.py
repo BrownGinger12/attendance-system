@@ -1,11 +1,12 @@
 # poller/access_to_mysql.py
 import pyodbc
-import mysql.connector
+import pymysql  # Changed from mysql.connector
 import os
 import time
 import shutil
 import tempfile
-from datetime import datetime, date, time as dtime
+from datetime import datetime, date
+from datetime import time as dtime  # More explicit import
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -17,7 +18,7 @@ ACCESS_DB_PATH = os.getenv("ACCESS_DB_PATH")
 MYSQL_HOST = os.getenv("MYSQL_HOST")
 MYSQL_USER = os.getenv("MYSQL_USER")
 MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD")
-MYSQL_DB = os.getenv("MYSQL_DB")
+MYSQL_DB = os.getenv("MYSQL_DATABASE")  # Changed from MYSQL_DB
 MYSQL_PORT = int(os.getenv("MYSQL_PORT", 3306))
 
 # ------------------------
@@ -44,7 +45,7 @@ def get_access_conn(temp_path):
 # MySQL connection
 # ------------------------
 def get_mysql_conn():
-    return mysql.connector.connect(
+    return pymysql.connect(  # Changed from mysql.connector.connect
         host=MYSQL_HOST,
         user=MYSQL_USER,
         password=MYSQL_PASSWORD,
@@ -93,6 +94,8 @@ def sync_departments():
 
     except Exception as e:
         print("Department poller error:", e)
+        import traceback
+        traceback.print_exc()
 
 # ------------------------
 # EMPLOYEES SYNC (full history)
@@ -139,6 +142,8 @@ def sync_employees():
 
     except Exception as e:
         print("Employee poller error:", e)
+        import traceback
+        traceback.print_exc()
 
 # ------------------------
 # ATTENDANCE SYNC (only new records)
@@ -191,6 +196,8 @@ def sync_attendance():
 
     except Exception as e:
         print("Attendance poller error:", e)
+        import traceback
+        traceback.print_exc()
 
 # ------------------------
 # MAIN LOOP
