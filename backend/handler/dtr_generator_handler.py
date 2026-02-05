@@ -75,22 +75,29 @@ def parse_attendance_data(json_data):
     for date_key, records in attendance.items():
         classified[date_key] = {'in': [], 'out': []}
 
-        # Filter valid AM INs (9am or later, before 12pm)
-        am_ins = [(t,h,m) for t,h in records['in'] if h < 12 
-                  for m in [int(t.split(':')[1])]
-                  if h >= 9]  # Must be 9am or later
+        # Filter valid AM INs (must be 9am or later AND before 12pm)
+        am_ins = []
+        for t, h in records['in']:
+            if h >= 9 and h < 12:  # Between 9am and 11:59am
+                am_ins.append((t, h))
         
-        # Filter valid PM INs (1pm or later)
-        pm_ins = [(t,h,m) for t,h in records['in'] if h >= 13 
-                  for m in [int(t.split(':')[1])]]  # Must be 1pm or later (after lunch)
+        # Filter valid PM INs (must be 1pm or later)
+        pm_ins = []
+        for t, h in records['in']:
+            if h >= 13:  # 1pm or later
+                pm_ins.append((t, h))
         
         # Filter valid AM OUTs (before 1pm)
-        am_outs = [(t,h,m) for t,h in records['out'] if h < 13
-                   for m in [int(t.split(':')[1])]]
+        am_outs = []
+        for t, h in records['out']:
+            if h < 13:  # Before 1pm
+                am_outs.append((t, h))
         
         # Filter valid PM OUTs (1pm or later)
-        pm_outs = [(t,h,m) for t,h in records['out'] if h >= 13
-                   for m in [int(t.split(':')[1])]]
+        pm_outs = []
+        for t, h in records['out']:
+            if h >= 13:  # 1pm or later
+                pm_outs.append((t, h))
 
         # IN - Get first valid clock-in for AM and PM
         if am_ins:
@@ -209,7 +216,12 @@ def fill_dtr_document_from_data(template_path, json_data, employee_name=''):
     month_name = datetime(year, month_num, 1).strftime('%B %Y')
 
     weekends = get_month_weekends(year, month_num)
-    employee_name = employee_name.upper()
+    
+    # Get the maximum day in this month
+    max_day_in_month = calendar.monthrange(year, month_num)[1]
+    
+    # Convert name to uppercase for display
+    employee_name_upper = employee_name.upper()
 
     # Total undertime
     total_hours = total_minutes = 0
@@ -222,7 +234,7 @@ def fill_dtr_document_from_data(template_path, json_data, employee_name=''):
 
     # Fill paragraphs
     for paragraph in doc.paragraphs:
-        paragraph.text = paragraph.text.replace('[name]', employee_name)\
+        paragraph.text = paragraph.text.replace('[name]', employee_name_upper)\
                                        .replace('[month]', month_name)\
                                        .replace('[toth]', str(total_hours))\
                                        .replace('[totm]', str(total_minutes))
@@ -233,6 +245,16 @@ def fill_dtr_document_from_data(template_path, json_data, employee_name=''):
             for cell in row.cells:
                 text = cell.text
                 for day in range(1, 32):
+                    # Skip days that don't exist in this month (leave placeholders blank)
+                    if day > max_day_in_month:
+                        placeholders = {
+                            f'[aa{day}]': '', f'[da{day}]': '', f'[ap{day}]': '', f'[dp{day}]': '',
+                            f'[uh{day}]': '', f'[m{day}]': ''
+                        }
+                        for ph, val in placeholders.items():
+                            text = text.replace(ph, val)
+                        continue
+                    
                     try:
                         date_obj = datetime(year, month_num, day).date()
                     except ValueError:
@@ -266,7 +288,7 @@ def fill_dtr_document_from_data(template_path, json_data, employee_name=''):
                     for run in paragraph.runs:
                         run.font.size = Pt(6)
 
-    return doc, employee_name, month_name, len(attendance)
+    return doc, employee_name_upper, month_name, len(attendance)
 
 
 def fill_dtr_document(template_path, userid, month, employee_name=''):
@@ -289,7 +311,12 @@ def fill_dtr_document(template_path, userid, month, employee_name=''):
     month_name = datetime(year, month_num, 1).strftime('%B %Y')
 
     weekends = get_month_weekends(year, month_num)
-    employee_name = employee_name.upper()
+    
+    # Get the maximum day in this month
+    max_day_in_month = calendar.monthrange(year, month_num)[1]
+    
+    # Convert name to uppercase for display
+    employee_name_upper = employee_name.upper()
 
     # Total undertime
     total_hours = total_minutes = 0
@@ -302,7 +329,7 @@ def fill_dtr_document(template_path, userid, month, employee_name=''):
 
     # Fill paragraphs
     for paragraph in doc.paragraphs:
-        paragraph.text = paragraph.text.replace('[name]', employee_name)\
+        paragraph.text = paragraph.text.replace('[name]', employee_name_upper)\
                                        .replace('[month]', month_name)\
                                        .replace('[toth]', str(total_hours))\
                                        .replace('[totm]', str(total_minutes))
@@ -313,6 +340,16 @@ def fill_dtr_document(template_path, userid, month, employee_name=''):
             for cell in row.cells:
                 text = cell.text
                 for day in range(1, 32):
+                    # Skip days that don't exist in this month (leave placeholders blank)
+                    if day > max_day_in_month:
+                        placeholders = {
+                            f'[aa{day}]': '', f'[da{day}]': '', f'[ap{day}]': '', f'[dp{day}]': '',
+                            f'[uh{day}]': '', f'[m{day}]': ''
+                        }
+                        for ph, val in placeholders.items():
+                            text = text.replace(ph, val)
+                        continue
+                    
                     try:
                         date_obj = datetime(year, month_num, day).date()
                     except ValueError:
@@ -346,4 +383,4 @@ def fill_dtr_document(template_path, userid, month, employee_name=''):
                     for run in paragraph.runs:
                         run.font.size = Pt(6)
 
-    return doc, employee_name, month_name, len(attendance)
+    return doc, employee_name_upper, month_name, len(attendance)
