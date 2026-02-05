@@ -162,74 +162,25 @@ def sync_employees():
 # ------------------------
 # ATTENDANCE SYNC (only new records)
 # ------------------------
-CHECKPOINT_FILE = "attendance_checkpoint.txt"
-
-def get_last_checkpoint():
-    """Read the last checkpoint timestamp from file"""
-    if os.path.exists(CHECKPOINT_FILE):
-        try:
-            with open(CHECKPOINT_FILE, 'r') as f:
-                timestamp_str = f.read().strip()
-                if timestamp_str:
-                    checkpoint = datetime.fromisoformat(timestamp_str)
-                    print(f"[DEBUG] Loaded checkpoint: {checkpoint} (type: {type(checkpoint)})")
-                    return checkpoint
-        except Exception as e:
-            print(f"Error reading checkpoint: {e}")
-    return None
-
-def save_checkpoint(timestamp):
-    """Save the checkpoint timestamp to file"""
-    try:
-        # Handle both datetime objects and strings
-        if isinstance(timestamp, datetime):
-            timestamp_str = timestamp.isoformat()
-        else:
-            # If it's already a datetime from Access, convert to datetime if needed
-            if hasattr(timestamp, 'isoformat'):
-                timestamp_str = timestamp.isoformat()
-            else:
-                timestamp_str = str(timestamp)
-        
-        with open(CHECKPOINT_FILE, 'w') as f:
-            f.write(timestamp_str)
-        print(f"[DEBUG] Saved checkpoint: {timestamp_str}")
-    except Exception as e:
-        print(f"Error saving checkpoint: {e}")
+last_attendance_check = None
 
 def sync_attendance():
+    global last_attendance_check
     try:
         temp_path = get_temp_copy()
         access_conn = get_access_conn(temp_path)
         access_cursor = access_conn.cursor()
 
-        last_checkpoint = get_last_checkpoint()
-        
-        if last_checkpoint:
-            # Use > to get only records AFTER the last checkpoint
-            print(f"[DEBUG] Looking for records after: {last_checkpoint}")
+        if last_attendance_check:
             query = "SELECT * FROM CHECKINOUT WHERE CHECKTIME > ? ORDER BY CHECKTIME"
-            access_cursor.execute(query, (last_checkpoint,))
+            access_cursor.execute(query, (last_attendance_check,))
         else:
-            # First run - sync all records
-            print("[DEBUG] First run - syncing all records")
-            query = "SELECT * FROM CHECKINOUT ORDER BY CHECKTIME"
-            access_cursor.execute(query)
+            today_start = datetime.combine(date.today(), dtime.min)
+            query = "SELECT * FROM CHECKINOUT WHERE CHECKTIME >= ? ORDER BY CHECKTIME"
+            access_cursor.execute(query, (today_start,))
 
         rows = access_cursor.fetchall()
         access_columns = [column[0] for column in access_cursor.description]
-        
-        # Debug: show what we found
-        if rows:
-            print(f"[DEBUG] Found {len(rows)} records to process")
-            checktime_idx = access_columns.index("CHECKTIME")
-            first_time = rows[0][checktime_idx]
-            last_time = rows[-1][checktime_idx]
-            print(f"[DEBUG] First record time: {first_time} (type: {type(first_time)})")
-            print(f"[DEBUG] Last record time: {last_time} (type: {type(last_time)})")
-        else:
-            print("[DEBUG] No new records found")
-        
         access_cursor.close()
         access_conn.close()
         os.remove(temp_path)
@@ -274,23 +225,14 @@ def sync_attendance():
         ON DUPLICATE KEY UPDATE {update_str}
         """
 
-        latest_timestamp = None
         for row in rows:
             # Extract only the values for matching columns
             values = tuple(row[idx] for idx in access_col_indices)
             mysql_cursor.execute(sql, values)
-            # Track the latest timestamp
-            checktime = row[access_columns.index("CHECKTIME")]
-            if latest_timestamp is None or checktime > latest_timestamp:
-                latest_timestamp = checktime
+            last_attendance_check = row[access_columns.index("CHECKTIME")]
 
         mysql_cursor.close()
         mysql_conn.close()
-        
-        # Save the latest timestamp as checkpoint
-        if latest_timestamp:
-            save_checkpoint(latest_timestamp)
-        
         print(f"Synced {len(rows)} new attendance records (using {len(mysql_col_names)} matching columns).")
 
     except Exception as e:
