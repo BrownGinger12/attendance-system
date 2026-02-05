@@ -219,12 +219,16 @@ def fill_dtr_document_from_data(template_path, json_data, employee_name=''):
     total_hours += total_minutes // 60
     total_minutes = total_minutes % 60
 
-    # Fill paragraphs
     for paragraph in doc.paragraphs:
-        paragraph.text = paragraph.text.replace('[name]', employee_name_upper)\
-                                       .replace('[month]', month_name)\
-                                       .replace('[toth]', str(total_hours))\
-                                       .replace('[totm]', str(total_minutes))
+        for run in paragraph.runs:
+            if '[name]' in run.text:
+                run.text = run.text.replace('[name]', employee_name_upper)
+            if '[month]' in run.text:
+                run.text = run.text.replace('[month]', month_name)
+            if '[toth]' in run.text:
+                run.text = run.text.replace('[toth]', str(total_hours))
+            if '[totm]' in run.text:
+                run.text = run.text.replace('[totm]', str(total_minutes))
 
     # Fill tables
     for table in doc.tables:
