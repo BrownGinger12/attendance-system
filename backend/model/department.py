@@ -1,25 +1,24 @@
 from pydantic import BaseModel
 from typing import Optional
-from gateway.microsoft_db_gateway import fetch_query
-
+from gateway.mysql_gateway import fetch_query
 
 class Department(BaseModel):
-    DEPTID: int
-    DEPTNAME: str
-    SUPDEPTID: Optional[int] = None
-    InheritParentSch: Optional[int] = None
-    InheritDeptSch: Optional[int] = None
-    InheritDeptSchClass: Optional[int] = None
-    AutoSchPlan: Optional[int] = None
-    InLate: Optional[int] = None
-    OutEarly: Optional[int] = None
-    InheritDeptRule: Optional[int] = None
-    MinAutoSchInterval: Optional[int] = None
-    RegisterOT: Optional[int] = None
-    DefaultSchId: Optional[int] = None
-    ATT: Optional[int] = None
-    Holiday: Optional[int] = None
-    OverTime: Optional[int] = None
+    deptid: int
+    deptname: str
+    supdeptid: Optional[int] = None
+    inheritparentsch: Optional[int] = None
+    inheritdeptsch: Optional[int] = None
+    inheritdeptschclass: Optional[int] = None
+    autoschplan: Optional[int] = None
+    inlate: Optional[int] = None
+    outearly: Optional[int] = None
+    inheritdeptrule: Optional[int] = None
+    minautoschinterval: Optional[int] = None
+    registerot: Optional[int] = None
+    defaultschid: Optional[int] = None
+    att: Optional[int] = None
+    holiday: Optional[int] = None
+    overtime: Optional[int] = None
 
     # --------------------------
     # Get ALL departments
@@ -27,11 +26,7 @@ class Department(BaseModel):
     @staticmethod
     def get_all():
         try:
-            sql = """
-            SELECT *
-            FROM [DEPARTMENTS]
-            ORDER BY DEPTID
-            """
+            sql = "SELECT * FROM departments ORDER BY deptid"
             rows = fetch_query(sql)
 
             return {
@@ -52,12 +47,8 @@ class Department(BaseModel):
     @staticmethod
     def get_by_id(dept_id: int):
         try:
-            sql = f"""
-            SELECT *
-            FROM [DEPARTMENTS]
-            WHERE DEPTID = {dept_id}
-            """
-            rows = fetch_query(sql)
+            sql = "SELECT * FROM departments WHERE deptid = %s"
+            rows = fetch_query(sql, [dept_id])
 
             return {
                 "statusCode": 200,
