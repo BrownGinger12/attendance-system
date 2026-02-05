@@ -70,17 +70,29 @@ def parse_attendance_data(json_data):
         else:
             attendance[date_key]['out'].append((time_str, hour))
 
-    # Classify AM/PM
+    # Classify AM/PM with validation
     classified = {}
     for date_key, records in attendance.items():
         classified[date_key] = {'in': [], 'out': []}
 
-        am_ins = [(t,h) for t,h in records['in'] if h < 12]
-        pm_ins = [(t,h) for t,h in records['in'] if h >= 12]
-        am_outs = [(t,h) for t,h in records['out'] if h < 13]
-        pm_outs = [(t,h) for t,h in records['out'] if h >= 13]
+        # Filter valid AM INs (9am or later, before 12pm)
+        am_ins = [(t,h,m) for t,h in records['in'] if h < 12 
+                  for m in [int(t.split(':')[1])]
+                  if h >= 9]  # Must be 9am or later
+        
+        # Filter valid PM INs (1pm or later)
+        pm_ins = [(t,h,m) for t,h in records['in'] if h >= 13 
+                  for m in [int(t.split(':')[1])]]  # Must be 1pm or later (after lunch)
+        
+        # Filter valid AM OUTs (before 1pm)
+        am_outs = [(t,h,m) for t,h in records['out'] if h < 13
+                   for m in [int(t.split(':')[1])]]
+        
+        # Filter valid PM OUTs (1pm or later)
+        pm_outs = [(t,h,m) for t,h in records['out'] if h >= 13
+                   for m in [int(t.split(':')[1])]]
 
-        # IN
+        # IN - Get first valid clock-in for AM and PM
         if am_ins:
             classified[date_key]['in'].append(am_ins[0][0])
         if pm_ins:
@@ -88,7 +100,7 @@ def parse_attendance_data(json_data):
                 classified[date_key]['in'].append('')
             classified[date_key]['in'].append(pm_ins[0][0])
 
-        # OUT
+        # OUT - Get first valid clock-out for AM and PM
         if am_outs:
             classified[date_key]['out'].append(am_outs[0][0])
         if pm_outs:
@@ -112,26 +124,63 @@ def get_month_weekends(year, month):
 
 
 def calculate_undertime(record, expected_am_hours=4, expected_pm_hours=4):
-    """Calculate undertime for AM/PM"""
+    """
+    Calculate undertime for AM/PM
+    Business rules:
+    - AM: 9am-12pm (ignore times before 9am)
+    - Lunch: 12pm-1pm (excluded from calculation)
+    - PM: 1pm onwards (ignore times before 1pm)
+    """
     total_minutes = 0
-    # AM
+    
+    # AM shift (9am - 12pm)
     if record['in'] and record['out']:
         try:
             am_in = datetime.strptime(record['in'][0], '%H:%M')
             am_out = datetime.strptime(record['out'][0], '%H:%M')
-            am_worked = (am_out - am_in).total_seconds() / 60
-            am_undertime = max(0, expected_am_hours*60 - am_worked)
-            total_minutes += am_undertime
+            
+            # Validate AM times
+            if am_in.hour >= 9 and am_out.hour < 13:
+                # If out time is during lunch (12:00-12:59), cap it at 12:00
+                if am_out.hour == 12:
+                    am_out = am_out.replace(hour=12, minute=0)
+                
+                am_worked = (am_out - am_in).total_seconds() / 60
+                
+                # Subtract lunch time if it overlaps
+                if am_out.hour == 12 and am_in.hour < 12:
+                    # If clocked out during lunch, don't count lunch minutes
+                    lunch_overlap = am_out.minute
+                    am_worked -= lunch_overlap
+                
+                am_undertime = max(0, expected_am_hours*60 - am_worked)
+                total_minutes += am_undertime
         except:
             pass
-    # PM
+    
+    # PM shift (1pm onwards)
     if len(record['in']) > 1 and len(record['out']) > 1:
         try:
             pm_in = datetime.strptime(record['in'][1], '%H:%M')
             pm_out = datetime.strptime(record['out'][1], '%H:%M')
-            pm_worked = (pm_out - pm_in).total_seconds() / 60
-            pm_undertime = max(0, expected_pm_hours*60 - pm_worked)
-            total_minutes += pm_undertime
+            
+            # Validate PM times (must be 1pm or later)
+            if pm_in.hour >= 13:
+                # If in time is during lunch (12:00-12:59), adjust to 1:00pm
+                if pm_in.hour == 12:
+                    pm_in = pm_in.replace(hour=13, minute=0)
+                
+                pm_worked = (pm_out - pm_in).total_seconds() / 60
+                
+                # Don't count any lunch break time (12pm-1pm)
+                if pm_in.hour == 12 or (pm_in.hour == 13 and pm_out.hour >= 13):
+                    # If clocked in during lunch, start counting from 1pm
+                    if pm_in.hour == 12:
+                        lunch_time = (13 - 12) * 60 - pm_in.minute
+                        pm_worked -= lunch_time
+                
+                pm_undertime = max(0, expected_pm_hours*60 - pm_worked)
+                total_minutes += pm_undertime
         except:
             pass
 
