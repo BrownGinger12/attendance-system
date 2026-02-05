@@ -3,6 +3,8 @@ import pyodbc
 import mysql.connector
 import os
 import time
+import shutil
+import tempfile
 from datetime import datetime, date, time as dtime
 from dotenv import load_dotenv
 
@@ -16,14 +18,24 @@ MYSQL_HOST = os.getenv("MYSQL_HOST")
 MYSQL_USER = os.getenv("MYSQL_USER")
 MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD")
 MYSQL_DB = os.getenv("MYSQL_DB")
+MYSQL_PORT = int(os.getenv("MYSQL_PORT", 3306))
 
 # ------------------------
-# Access connection (READ-ONLY)
+# Create a temporary copy of the Access DB
 # ------------------------
-def get_access_conn():
+def get_temp_copy():
+    temp_dir = tempfile.gettempdir()
+    temp_path = os.path.join(temp_dir, os.path.basename(ACCESS_DB_PATH))
+    shutil.copy2(ACCESS_DB_PATH, temp_path)
+    return temp_path
+
+# ------------------------
+# Access connection
+# ------------------------
+def get_access_conn(temp_path):
     conn_str = (
         r"DRIVER={Microsoft Access Driver (*.mdb, *.accdb)};"
-        f"DBQ={ACCESS_DB_PATH};"
+        f"DBQ={temp_path};"
         "ReadOnly=True;"
     )
     return pyodbc.connect(conn_str)
@@ -37,6 +49,7 @@ def get_mysql_conn():
         user=MYSQL_USER,
         password=MYSQL_PASSWORD,
         database=MYSQL_DB,
+        port=MYSQL_PORT,
         autocommit=True
     )
 
@@ -45,13 +58,15 @@ def get_mysql_conn():
 # ------------------------
 def sync_departments():
     try:
-        access_conn = get_access_conn()
+        temp_path = get_temp_copy()
+        access_conn = get_access_conn(temp_path)
         access_cursor = access_conn.cursor()
         access_cursor.execute("SELECT * FROM DEPARTMENTS")
         rows = access_cursor.fetchall()
         columns = [column[0] for column in access_cursor.description]
         access_cursor.close()
         access_conn.close()
+        os.remove(temp_path)
 
         if not rows:
             print("No departments found in Access DB.")
@@ -59,7 +74,6 @@ def sync_departments():
 
         mysql_conn = get_mysql_conn()
         mysql_cursor = mysql_conn.cursor()
-
         placeholders = ", ".join(["%s"] * len(columns))
         columns_str = ", ".join(columns)
         update_str = ", ".join([f"{col} = VALUES({col})" for col in columns])
@@ -85,13 +99,15 @@ def sync_departments():
 # ------------------------
 def sync_employees():
     try:
-        access_conn = get_access_conn()
+        temp_path = get_temp_copy()
+        access_conn = get_access_conn(temp_path)
         access_cursor = access_conn.cursor()
         access_cursor.execute("SELECT * FROM USERINFO")
         rows = access_cursor.fetchall()
         columns = [column[0] for column in access_cursor.description]
         access_cursor.close()
         access_conn.close()
+        os.remove(temp_path)
 
         if not rows:
             print("No employees found in Access DB.")
@@ -100,7 +116,6 @@ def sync_employees():
         mysql_conn = get_mysql_conn()
         mysql_cursor = mysql_conn.cursor()
 
-        # Add schedule_type column with default "normal"
         if "schedule_type" not in columns:
             columns.append("schedule_type")
 
@@ -115,7 +130,7 @@ def sync_employees():
         """
 
         for row in rows:
-            row_tuple = tuple(list(row) + ["normal"])  # append schedule_type
+            row_tuple = tuple(list(row) + ["normal"])
             mysql_cursor.execute(sql, row_tuple)
 
         mysql_cursor.close()
@@ -133,15 +148,14 @@ last_attendance_check = None
 def sync_attendance():
     global last_attendance_check
     try:
-        access_conn = get_access_conn()
+        temp_path = get_temp_copy()
+        access_conn = get_access_conn(temp_path)
         access_cursor = access_conn.cursor()
 
-        # Only fetch new records
         if last_attendance_check:
             query = "SELECT * FROM CHECKINOUT WHERE CHECKTIME > ? ORDER BY CHECKTIME"
             access_cursor.execute(query, (last_attendance_check,))
         else:
-            # First run: fetch today's records
             today_start = datetime.combine(date.today(), dtime.min)
             query = "SELECT * FROM CHECKINOUT WHERE CHECKTIME >= ? ORDER BY CHECKTIME"
             access_cursor.execute(query, (today_start,))
@@ -150,14 +164,13 @@ def sync_attendance():
         columns = [column[0] for column in access_cursor.description]
         access_cursor.close()
         access_conn.close()
+        os.remove(temp_path)
 
         if not rows:
             return
 
-        # Insert into MySQL
         mysql_conn = get_mysql_conn()
         mysql_cursor = mysql_conn.cursor()
-
         placeholders = ", ".join(["%s"] * len(columns))
         columns_str = ", ".join(columns)
         update_str = ", ".join([f"{col} = VALUES({col})" for col in columns])
@@ -170,7 +183,6 @@ def sync_attendance():
 
         for row in rows:
             mysql_cursor.execute(sql, tuple(row))
-            # Update last checktime
             last_attendance_check = row[columns.index("CHECKTIME")]
 
         mysql_cursor.close()
