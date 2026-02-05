@@ -1,187 +1,300 @@
-# app.py
-from flask import Flask, request, jsonify, send_file
-from flask_cors import CORS
-from flask_socketio import SocketIO, emit
-import os
-import threading
-from datetime import datetime, date, time as dtime
+# dtr_generator.py
+from docx import Document
+from docx.shared import Pt
+from datetime import datetime, date, timedelta
+import calendar
+from gateway.mysql_gateway import fetch_query
 
-from handler.dtr_generator_handler import fill_dtr_document, fill_dtr_document_from_data
-from handler.employee_handler import (
-    delete_employee,
-    export_employees_to_excel,
-    get_employee_by_id,
-    get_employees_paginated,
-    get_total_employee_pages,
-    get_user_fingerprints,
-    search_employees,
-    update_employee,
-    get_employee_count
-)
-from handler.attendance_record_handler import (
-    get_attendance_month,
-    get_attendance_day,
-    get_attendance_employee
-)
-from handler.department_handler import get_departments, get_department_by_id
-from handler.attendance_watcher_handler import AttendanceWatcher
 
-# ------------------------------
-# Flask + SocketIO setup
-# ------------------------------
-app = Flask(__name__)
-CORS(app)
+def get_attendance_from_db(userid, month):
+    """Fetch attendance records from MySQL for a given user and month"""
+    start = datetime.strptime(month + "-01", "%Y-%m-%d")
+    if start.month == 12:
+        end = start.replace(year=start.year + 1, month=1)
+    else:
+        end = start.replace(month=start.month + 1)
 
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
-ATTENDANCE_NS = '/attendance'
+    sql = """
+        SELECT userid, checktime, checktype
+        FROM attendance
+        WHERE userid = %s AND checktime >= %s AND checktime < %s
+        ORDER BY checktime ASC
+    """
+    rows = fetch_query(sql, [userid, start, end])
+    return {"name": "", "data": rows}
 
-# ------------------------------
-# Attendance Watcher
-# ------------------------------
-watcher = AttendanceWatcher(socketio, namespace=ATTENDANCE_NS)
 
-# Start watcher in a separate daemon thread
-threading.Thread(target=watcher.start, daemon=True).start()
+def parse_datetime_flexible(dt_value):
+    """Helper to parse various datetime formats"""
+    if isinstance(dt_value, datetime):
+        return dt_value
+    
+    # Try different datetime formats
+    formats = [
+        '%Y-%m-%d %H:%M:%S',
+        '%a, %d %b %Y %H:%M:%S GMT',  # GMT format from API
+        '%Y-%m-%dT%H:%M:%S',
+        '%Y-%m-%dT%H:%M:%S.%f',
+        '%Y-%m-%dT%H:%M:%S.%fZ',
+    ]
+    
+    for fmt in formats:
+        try:
+            return datetime.strptime(dt_value, fmt)
+        except ValueError:
+            continue
+    
+    # If none of the formats work, raise an error with helpful message
+    raise ValueError(f"Unable to parse datetime: {dt_value}")
 
-# ------------------------------
-# WebSocket events
-# ------------------------------
-@socketio.on('connect', namespace=ATTENDANCE_NS)
-def on_connect():
-    print("Attendance socket connected")
-    emit("status", {"message": "Connected to attendance namespace"})
 
-    try:
-        # Fetch today's attendance from SQL
-        rows = watcher.get_today_attendance()
+def parse_attendance_data(json_data):
+    """Parse attendance records into structured AM/PM IN/OUT"""
+    sorted_records = sorted(
+        json_data['data'],
+        key=lambda x: parse_datetime_flexible(x['checktime'])
+    )
 
-        # Convert CHECKTIME to ISO string for all rows
-        for r in rows:
-            if isinstance(r.get("checktime"), datetime):
-                r["checktime"] = r["checktime"].isoformat()
+    attendance = {}
+    for record in sorted_records:
+        dt = parse_datetime_flexible(record['checktime'])
+        date_key = dt.date()
+        if date_key not in attendance:
+            attendance[date_key] = {'in': [], 'out': []}
 
-        # Emit all today's attendance to the client
-        emit("attendance:init", rows)
-        print(f"Sent {len(rows)} attendance records to client.")
+        time_str = dt.strftime('%H:%M')
+        hour = dt.hour
 
-    except Exception as e:
-        print("Error fetching today's attendance:", e)
-        emit("attendance:init", [])
+        if record['checktype'] == 'I':
+            attendance[date_key]['in'].append((time_str, hour))
+        else:
+            attendance[date_key]['out'].append((time_str, hour))
 
-@socketio.on('disconnect', namespace=ATTENDANCE_NS)
-def on_disconnect():
-    print("Attendance socket disconnected")
+    # Classify AM/PM
+    classified = {}
+    for date_key, records in attendance.items():
+        classified[date_key] = {'in': [], 'out': []}
 
-# ------------------------------
-# Department endpoints
-# ------------------------------
-@app.route("/departments", methods=["GET"])
-def departments():
-    return get_departments()
+        am_ins = [(t,h) for t,h in records['in'] if h < 12]
+        pm_ins = [(t,h) for t,h in records['in'] if h >= 12]
+        am_outs = [(t,h) for t,h in records['out'] if h < 13]
+        pm_outs = [(t,h) for t,h in records['out'] if h >= 13]
 
-@app.route("/department/<int:dept_id>", methods=["GET"])
-def department(dept_id):
-    return get_department_by_id(dept_id)
+        # IN
+        if am_ins:
+            classified[date_key]['in'].append(am_ins[0][0])
+        if pm_ins:
+            if not am_ins:
+                classified[date_key]['in'].append('')
+            classified[date_key]['in'].append(pm_ins[0][0])
 
-# ------------------------------
-# Employee endpoints
-# ------------------------------
-@app.route("/employees", methods=["GET"])
-def employees():
-    return get_employees_paginated()
+        # OUT
+        if am_outs:
+            classified[date_key]['out'].append(am_outs[0][0])
+        if pm_outs:
+            if not am_outs:
+                classified[date_key]['out'].append('')
+            classified[date_key]['out'].append(pm_outs[0][0])
 
-@app.route("/employee/<int:user_id>", methods=["GET"])
-def employee(user_id):
-    return get_employee_by_id(user_id)
+    return classified
 
-@app.route("/employees/pages", methods=["GET"])
-def employees_total_pages():
-    return get_total_employee_pages()
 
-@app.route("/employee/<int:user_id>", methods=["PUT"])
-def update_employee_api(user_id):
-    return update_employee(user_id)
+def get_month_weekends(year, month):
+    """Return all weekends in the month as {day: 'SAT'/'SUN'}"""
+    weekends = {}
+    cal = calendar.monthcalendar(year, month)
+    for week in cal:
+        if week[calendar.SATURDAY] != 0:
+            weekends[week[calendar.SATURDAY]] = 'SAT'
+        if week[calendar.SUNDAY] != 0:
+            weekends[week[calendar.SUNDAY]] = 'SUN'
+    return weekends
 
-@app.route("/employees/count", methods=["GET"])
-def employees_count():
-    return get_employee_count()
 
-@app.route('/employee/<int:user_id>', methods=['DELETE'])
-def delete_employee_route(user_id):
-    return delete_employee(user_id)
+def calculate_undertime(record, expected_am_hours=4, expected_pm_hours=4):
+    """Calculate undertime for AM/PM"""
+    total_minutes = 0
+    # AM
+    if record['in'] and record['out']:
+        try:
+            am_in = datetime.strptime(record['in'][0], '%H:%M')
+            am_out = datetime.strptime(record['out'][0], '%H:%M')
+            am_worked = (am_out - am_in).total_seconds() / 60
+            am_undertime = max(0, expected_am_hours*60 - am_worked)
+            total_minutes += am_undertime
+        except:
+            pass
+    # PM
+    if len(record['in']) > 1 and len(record['out']) > 1:
+        try:
+            pm_in = datetime.strptime(record['in'][1], '%H:%M')
+            pm_out = datetime.strptime(record['out'][1], '%H:%M')
+            pm_worked = (pm_out - pm_in).total_seconds() / 60
+            pm_undertime = max(0, expected_pm_hours*60 - pm_worked)
+            total_minutes += pm_undertime
+        except:
+            pass
 
-@app.route('/employees/search', methods=['GET'])
-def search_employees_route():
-    return search_employees()
+    hours = int(total_minutes // 60)
+    minutes = int(total_minutes % 60)
+    return hours, minutes
 
-@app.route('/employees/<int:user_id>/fingerprints', methods=['GET'])
-def get_fingerprints_route(user_id):
-    return get_user_fingerprints(user_id)
 
-@app.route('/employees/export/excel', methods=['GET'])
-def export_excel_route():
-    return export_employees_to_excel()
+def fill_dtr_document_from_data(template_path, json_data, employee_name=''):
+    """
+    Fill DTR DOCX template using provided attendance data (no database fetch)
+    json_data should be: {"name": "...", "data": [attendance records]}
+    """
+    doc = Document(template_path)
+    json_data['name'] = employee_name
 
-# ------------------------------
-# Attendance endpoints
-# ------------------------------
-@app.route("/attendance/employee", methods=["GET"])
-def attendance_employee():
-    return get_attendance_employee()
+    attendance = parse_attendance_data(json_data)
 
-@app.route("/attendance/month", methods=["GET"])
-def attendance_month():
-    return get_attendance_month()
+    # Determine year/month names
+    if json_data['data']:
+        first_dt = parse_datetime_flexible(json_data['data'][0]['checktime'])
+        year, month_num = first_dt.year, first_dt.month
+    else:
+        now = datetime.now()
+        year, month_num = now.year, now.month
+    month_name = datetime(year, month_num, 1).strftime('%B %Y')
 
-@app.route("/attendance/day", methods=["GET"])
-def attendance_day():
-    return get_attendance_day()
+    weekends = get_month_weekends(year, month_num)
+    employee_name = employee_name.upper()
 
-# ------------------------------
-# DTR Export endpoint
-# ------------------------------
-# FIXED API ROUTE - Replace your existing /api/fill-dtr-json endpoint with this:
+    # Total undertime
+    total_hours = total_minutes = 0
+    for date_obj, record in attendance.items():
+        uh, um = calculate_undertime(record)
+        total_hours += uh
+        total_minutes += um
+    total_hours += total_minutes // 60
+    total_minutes = total_minutes % 60
 
-@app.route('/api/fill-dtr-json', methods=['POST'])
-def fill_dtr_json():
-    try:
-        json_data = request.get_json()
-        if not json_data or 'name' not in json_data or 'data' not in json_data:
-            return jsonify({'error': 'JSON must contain "name" and "data"'}), 400
+    # Fill paragraphs
+    for paragraph in doc.paragraphs:
+        paragraph.text = paragraph.text.replace('[name]', employee_name)\
+                                       .replace('[month]', month_name)\
+                                       .replace('[toth]', str(total_hours))\
+                                       .replace('[totm]', str(total_minutes))
 
-        template_path = "dtr/template/dtr-temp.docx"
-        if not os.path.exists(template_path):
-            return jsonify({'error': f'Template not found: {template_path}'}), 404
+    # Fill tables
+    for table in doc.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                text = cell.text
+                for day in range(1, 32):
+                    try:
+                        date_obj = datetime(year, month_num, day).date()
+                    except ValueError:
+                        continue
 
-        employee_name = json_data.get('name', 'Unknown')
+                    is_weekend = day in weekends
+                    weekend_label = weekends.get(day, '')
 
-        # Use the new function that accepts data directly
-        filled_doc, employee_name, month_name, attendance_days = fill_dtr_document_from_data(
-            template_path, 
-            json_data,
-            employee_name
-        )
+                    placeholders = {
+                        f'[aa{day}]': '', f'[da{day}]': '', f'[ap{day}]': '', f'[dp{day}]': '',
+                        f'[uh{day}]': '', f'[m{day}]': ''
+                    }
 
-        from io import BytesIO
-        doc_buffer = BytesIO()
-        filled_doc.save(doc_buffer)
-        doc_buffer.seek(0)
+                    if is_weekend:
+                        placeholders[f'[aa{day}]'] = weekend_label
+                    elif date_obj in attendance:
+                        record = attendance[date_obj]
+                        placeholders[f'[aa{day}]'] = record['in'][0] if record['in'] else ''
+                        placeholders[f'[da{day}]'] = record['out'][0] if record['out'] else ''
+                        placeholders[f'[ap{day}]'] = record['in'][1] if len(record['in']) > 1 else ''
+                        placeholders[f'[dp{day}]'] = record['out'][1] if len(record['out']) > 1 else ''
+                        uh, um = calculate_undertime(record)
+                        placeholders[f'[uh{day}]'] = str(uh) if uh > 0 else ''
+                        placeholders[f'[m{day}]'] = str(um) if um > 0 else ''
 
-        output_filename = f"DTR_{employee_name.replace(' ', '_')}_{month_name.replace(' ', '_')}.docx"
+                    for ph, val in placeholders.items():
+                        text = text.replace(ph, val)
 
-        return send_file(
-            doc_buffer,
-            mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-            as_attachment=True,
-            download_name=output_filename
-        )
-    except Exception as e:
-        import traceback
-        print(traceback.format_exc())  # This will help debug
-        return jsonify({'error': str(e)}), 500
+                cell.text = text
+                for paragraph in cell.paragraphs:
+                    for run in paragraph.runs:
+                        run.font.size = Pt(6)
 
-# ------------------------------
-# Run the app
-# ------------------------------
-if __name__ == "__main__":
-    socketio.run(app, debug=True, host="0.0.0.0", port=5000)
+    return doc, employee_name, month_name, len(attendance)
+
+
+def fill_dtr_document(template_path, userid, month, employee_name=''):
+    """
+    Fill DTR DOCX template for a specific user and month
+    """
+    doc = Document(template_path)
+    json_data = get_attendance_from_db(userid, month)
+    json_data['name'] = employee_name
+
+    attendance = parse_attendance_data(json_data)
+
+    # Determine year/month names
+    if json_data['data']:
+        first_dt = parse_datetime_flexible(json_data['data'][0]['checktime'])
+        year, month_num = first_dt.year, first_dt.month
+    else:
+        now = datetime.now()
+        year, month_num = now.year, now.month
+    month_name = datetime(year, month_num, 1).strftime('%B %Y')
+
+    weekends = get_month_weekends(year, month_num)
+    employee_name = employee_name.upper()
+
+    # Total undertime
+    total_hours = total_minutes = 0
+    for date_obj, record in attendance.items():
+        uh, um = calculate_undertime(record)
+        total_hours += uh
+        total_minutes += um
+    total_hours += total_minutes // 60
+    total_minutes = total_minutes % 60
+
+    # Fill paragraphs
+    for paragraph in doc.paragraphs:
+        paragraph.text = paragraph.text.replace('[name]', employee_name)\
+                                       .replace('[month]', month_name)\
+                                       .replace('[toth]', str(total_hours))\
+                                       .replace('[totm]', str(total_minutes))
+
+    # Fill tables
+    for table in doc.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                text = cell.text
+                for day in range(1, 32):
+                    try:
+                        date_obj = datetime(year, month_num, day).date()
+                    except ValueError:
+                        continue
+
+                    is_weekend = day in weekends
+                    weekend_label = weekends.get(day, '')
+
+                    placeholders = {
+                        f'[aa{day}]': '', f'[da{day}]': '', f'[ap{day}]': '', f'[dp{day}]': '',
+                        f'[uh{day}]': '', f'[m{day}]': ''
+                    }
+
+                    if is_weekend:
+                        placeholders[f'[aa{day}]'] = weekend_label
+                    elif date_obj in attendance:
+                        record = attendance[date_obj]
+                        placeholders[f'[aa{day}]'] = record['in'][0] if record['in'] else ''
+                        placeholders[f'[da{day}]'] = record['out'][0] if record['out'] else ''
+                        placeholders[f'[ap{day}]'] = record['in'][1] if len(record['in']) > 1 else ''
+                        placeholders[f'[dp{day}]'] = record['out'][1] if len(record['out']) > 1 else ''
+                        uh, um = calculate_undertime(record)
+                        placeholders[f'[uh{day}]'] = str(uh) if uh > 0 else ''
+                        placeholders[f'[m{day}]'] = str(um) if um > 0 else ''
+
+                    for ph, val in placeholders.items():
+                        text = text.replace(ph, val)
+
+                cell.text = text
+                for paragraph in cell.paragraphs:
+                    for run in paragraph.runs:
+                        run.font.size = Pt(6)
+
+    return doc, employee_name, month_name, len(attendance)
