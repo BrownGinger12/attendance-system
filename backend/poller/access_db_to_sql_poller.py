@@ -171,10 +171,13 @@ def sync_attendance():
         access_conn = get_access_conn(temp_path)
         access_cursor = access_conn.cursor()
 
+        # Determine the query based on whether we've checked before
         if last_attendance_check:
+            # Get records after the last check time
             query = "SELECT * FROM CHECKINOUT WHERE CHECKTIME > ? ORDER BY CHECKTIME"
             access_cursor.execute(query, (last_attendance_check,))
         else:
+            # First run: get all records from today onwards
             today_start = datetime.combine(date.today(), dtime.min)
             query = "SELECT * FROM CHECKINOUT WHERE CHECKTIME >= ? ORDER BY CHECKTIME"
             access_cursor.execute(query, (today_start,))
@@ -186,6 +189,7 @@ def sync_attendance():
         os.remove(temp_path)
 
         if not rows:
+            print("No new attendance records to sync.")
             return
 
         # Get MySQL table columns (excluding auto-increment 'id')
@@ -225,15 +229,30 @@ def sync_attendance():
         ON DUPLICATE KEY UPDATE {update_str}
         """
 
+        # Find the CHECKTIME column index
+        checktime_index = access_columns.index("CHECKTIME")
+        max_checktime = None
+
+        # Process all rows and track the maximum CHECKTIME
         for row in rows:
             # Extract only the values for matching columns
             values = tuple(row[idx] for idx in access_col_indices)
             mysql_cursor.execute(sql, values)
-            last_attendance_check = row[access_columns.index("CHECKTIME")]
+            
+            # Track the maximum CHECKTIME from this batch
+            current_checktime = row[checktime_index]
+            if max_checktime is None or current_checktime > max_checktime:
+                max_checktime = current_checktime
 
         mysql_cursor.close()
         mysql_conn.close()
-        print(f"Synced {len(rows)} new attendance records (using {len(mysql_col_names)} matching columns).")
+        
+        # Update the last check time to the maximum from this batch
+        if max_checktime:
+            last_attendance_check = max_checktime
+            print(f"Synced {len(rows)} new attendance records (using {len(mysql_col_names)} matching columns). Last check time: {max_checktime}")
+        else:
+            print(f"Synced {len(rows)} new attendance records (using {len(mysql_col_names)} matching columns).")
 
     except Exception as e:
         print("Attendance poller error:", e)
