@@ -162,25 +162,49 @@ def sync_employees():
 # ------------------------
 # ATTENDANCE SYNC (only new records)
 # ------------------------
-last_attendance_check = None
-
 def sync_attendance():
-    global last_attendance_check
     try:
+        # First, get the last CHECKTIME from MySQL attendance table
+        mysql_conn = get_mysql_conn()
+        mysql_cursor = mysql_conn.cursor()
+        
+        # Find the CHECKTIME column name (case-insensitive)
+        mysql_columns = get_mysql_columns('attendance')
+        checktime_col = None
+        for col in mysql_columns:
+            if col.lower() == 'checktime':
+                checktime_col = col
+                break
+        
+        if not checktime_col:
+            print("Error: CHECKTIME column not found in attendance table")
+            mysql_cursor.close()
+            mysql_conn.close()
+            return
+        
+        # Get the maximum CHECKTIME from the attendance table
+        mysql_cursor.execute(f"SELECT MAX({checktime_col}) FROM attendance")
+        result = mysql_cursor.fetchone()
+        last_checktime = result[0] if result and result[0] else None
+        mysql_cursor.close()
+        mysql_conn.close()
+
+        # Now query Access DB for records newer than the last one in MySQL
         temp_path = get_temp_copy()
         access_conn = get_access_conn(temp_path)
         access_cursor = access_conn.cursor()
 
-        # Determine the query based on whether we've checked before
-        if last_attendance_check:
-            # Get records after the last check time
+        if last_checktime:
+            # Get records after the last one in the database
             query = "SELECT * FROM CHECKINOUT WHERE CHECKTIME > ? ORDER BY CHECKTIME"
-            access_cursor.execute(query, (last_attendance_check,))
+            access_cursor.execute(query, (last_checktime,))
+            print(f"Checking for records after {last_checktime}...")
         else:
-            # First run: get all records from today onwards
+            # No records in MySQL yet, get all records from today onwards
             today_start = datetime.combine(date.today(), dtime.min)
             query = "SELECT * FROM CHECKINOUT WHERE CHECKTIME >= ? ORDER BY CHECKTIME"
             access_cursor.execute(query, (today_start,))
+            print(f"No existing records. Fetching from {today_start}...")
 
         rows = access_cursor.fetchall()
         access_columns = [column[0] for column in access_cursor.description]
@@ -217,6 +241,7 @@ def sync_attendance():
         mysql_col_names = [col for col, _ in column_mapping]
         access_col_indices = [idx for _, idx in column_mapping]
 
+        # Insert the new records into MySQL
         mysql_conn = get_mysql_conn()
         mysql_cursor = mysql_conn.cursor()
         placeholders = ", ".join(["%s"] * len(mysql_col_names))
@@ -229,30 +254,25 @@ def sync_attendance():
         ON DUPLICATE KEY UPDATE {update_str}
         """
 
-        # Find the CHECKTIME column index
+        # Find the CHECKTIME column index in Access results
         checktime_index = access_columns.index("CHECKTIME")
-        max_checktime = None
+        newest_checktime = None
 
-        # Process all rows and track the maximum CHECKTIME
+        # Insert all rows
         for row in rows:
             # Extract only the values for matching columns
             values = tuple(row[idx] for idx in access_col_indices)
             mysql_cursor.execute(sql, values)
             
-            # Track the maximum CHECKTIME from this batch
+            # Track the newest CHECKTIME
             current_checktime = row[checktime_index]
-            if max_checktime is None or current_checktime > max_checktime:
-                max_checktime = current_checktime
+            if newest_checktime is None or current_checktime > newest_checktime:
+                newest_checktime = current_checktime
 
         mysql_cursor.close()
         mysql_conn.close()
         
-        # Update the last check time to the maximum from this batch
-        if max_checktime:
-            last_attendance_check = max_checktime
-            print(f"Synced {len(rows)} new attendance records (using {len(mysql_col_names)} matching columns). Last check time: {max_checktime}")
-        else:
-            print(f"Synced {len(rows)} new attendance records (using {len(mysql_col_names)} matching columns).")
+        print(f"✓ Synced {len(rows)} new attendance records. Newest: {newest_checktime}")
 
     except Exception as e:
         print("Attendance poller error:", e)
