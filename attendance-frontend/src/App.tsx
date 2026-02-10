@@ -13,15 +13,13 @@ import NotFoundPage from "./pages/notFoundPage";
 
 export default function App() {
   return (
-    <Router>
+    <Router basename="/attendance">
       <AuthProvider>
         <div className="w-full h-screen">
           <Routes>
-            {/* Public routes */}
             <Route path="/login" element={<LoginPage />} />
             <Route path="/dtr" element={<DTRPage />} />
 
-            {/* Protected admin route */}
             <Route
               path="/admin"
               element={
@@ -31,10 +29,7 @@ export default function App() {
               }
             />
 
-            {/* Redirect root to DTR */}
             <Route path="/" element={<Navigate to="/dtr" replace />} />
-
-            {/* 404 Not Found - catch all */}
             <Route path="*" element={<NotFoundPage />} />
           </Routes>
         </div>
