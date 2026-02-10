@@ -4,6 +4,7 @@ from flaredantic import FlareTunnel, FlareConfig
 from flask_cors import CORS
 from flask_socketio import SocketIO, emit
 import os
+import time
 import threading
 from datetime import datetime, date, time as dtime
 
@@ -187,7 +188,9 @@ def run_tunnel():
     config = FlareConfig(port=5000, verbose=True)
     with FlareTunnel(config) as tunnel:
         print("🌍 Public URL:", tunnel.tunnel_url)
-        tunnel.wait()  # keep tunnel alive
+
+        while True:
+            time.sleep(60)
         
 # ------------------------------
 # Run the app
