@@ -101,16 +101,19 @@ const DTRPage: React.FC = () => {
 
       const time = timeMatch[0];
       const hour = parseInt(time.split(":")[0]);
+      const minute = parseInt(time.split(":")[1]);
       const date = new Date(record.checktime).toISOString().split("T")[0];
 
       if (!grouped[date]) {
         grouped[date] = { date };
       }
 
-      const isAM = hour < 12;
+      // AM period: before 12:30 PM (up to 12:29 PM)
+      // PM period: 12:30 PM and after
+      const isAM = hour < 12 || (hour === 12 && minute < 30);
 
       if (record.checktype === "I") {
-        // For check-ins, get the earliest time
+        // Check-in: keep earliest time
         if (isAM) {
           if (!grouped[date].amCheckIn || time < grouped[date].amCheckIn!) {
             grouped[date].amCheckIn = time;
@@ -121,17 +124,17 @@ const DTRPage: React.FC = () => {
           }
         }
       } else if (record.checktype === "O") {
-        // For check-outs, get the latest time, but only if it's greater than the check-in
+        // Check-out: keep latest time that is after check-in
         if (isAM) {
-          // Only set AM check-out if it's greater than AM check-in (or if no check-in exists yet)
-          if (!grouped[date].amCheckIn || time > grouped[date].amCheckIn!) {
+          // Only consider AM out if it's after AM in (or if no AM in yet)
+          if (!grouped[date].amCheckIn || time > grouped[date].amCheckIn) {
             if (!grouped[date].amCheckOut || time > grouped[date].amCheckOut!) {
               grouped[date].amCheckOut = time;
             }
           }
         } else {
-          // Only set PM check-out if it's greater than PM check-in (or if no check-in exists yet)
-          if (!grouped[date].pmCheckIn || time > grouped[date].pmCheckIn!) {
+          // Only consider PM out if it's after PM in (or if no PM in yet)
+          if (!grouped[date].pmCheckIn || time > grouped[date].pmCheckIn) {
             if (!grouped[date].pmCheckOut || time > grouped[date].pmCheckOut!) {
               grouped[date].pmCheckOut = time;
             }
