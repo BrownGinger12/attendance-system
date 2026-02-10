@@ -21,15 +21,13 @@ import {
   formatDate,
 } from "../utils/attendanceUtils";
 
-const ATTENDANCE_NS = "/attendance";
-
 const RealtimeAttendancePage: React.FC = () => {
-  const [logs, setLogs] = useState<AttendanceLog[]>([]);
+  const [_logs, setLogs] = useState<AttendanceLog[]>([]);
   const [employeeAttendance, setEmployeeAttendance] = useState<
     Map<number, EmployeeAttendance>
   >(new Map());
   const [isConnected, setIsConnected] = useState(false);
-  const [statusMessage, setStatusMessage] = useState<string>("Disconnected");
+  const [_statusMessage, setStatusMessage] = useState<string>("Disconnected");
   const [employeeCache, setEmployeeCache] = useState<{ [key: number]: string }>(
     {},
   );

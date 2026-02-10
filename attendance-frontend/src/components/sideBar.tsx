@@ -17,7 +17,6 @@ interface SidebarProps {
 
 const Sidebar: React.FC<SidebarProps> = ({
   isExpanded = true,
-  onToggle,
   activePage,
   onPageChange,
 }) => {

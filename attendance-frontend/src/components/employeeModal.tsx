@@ -236,7 +236,7 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({
   return (
     <>
       <div
-        className="fixed inset-0 bg-black bg-opacity-75 z-40 animate-fadeIn"
+        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
         onClick={onClose}
       />
 
@@ -425,7 +425,7 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({
       {showDeleteConfirm && (
         <div className="fixed inset-0 flex items-center justify-center z-[60] p-4">
           <div
-            className="fixed inset-0 bg-black bg-opacity-75"
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm"
             onClick={() => !deleting && setShowDeleteConfirm(false)}
           />
           <div className="bg-slate-900 border border-slate-800 rounded-lg w-full max-w-sm relative z-10 animate-fadeIn">
@@ -480,8 +480,14 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({
 
       <style>{`
         @keyframes fadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
+          from {
+            opacity: 0;
+            transform: scale(0.95);
+          }
+          to {
+            opacity: 1;
+            transform: scale(1);
+          }
         }
         .animate-fadeIn {
           animation: fadeIn 0.2s ease-out;
