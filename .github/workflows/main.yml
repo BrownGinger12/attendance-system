@@ -58,7 +58,7 @@ jobs:
     - name: Send webhook request
       run: |
         WEBHOOK_URL="https://api.selim-dev.online/update"  # Replace with your server endpoint
-        SECRET="${{ secrets.GITHUB_SECRET }}"        # GitHub secret for verification
+        SECRET="${{ secrets.WEBHOOK_SECRET }}"        # GitHub secret for verification
 
         # Send POST request
         curl -X POST $WEBHOOK_URL \
