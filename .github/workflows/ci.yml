@@ -1,0 +1,62 @@
+name: Test Python App
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test-and-trigger:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          cd ./backend
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install requests
+
+      - name: Run app briefly and test endpoint
+        run: |
+          # Start the app in the background
+          cd ./backend
+
+          nohup python app.py &
+          APP_PID=$!
+          echo "App started with PID $APP_PID"
+
+          # Wait until server responds (max 15s)
+          for i in {1..15}; do
+            if curl -s http://127.0.0.1:5000/ > /dev/null; then
+              echo "Server is ready"
+              break
+            fi
+            echo "Waiting for server..."
+            sleep 1
+          done
+
+          python - <<'EOF'
+          import requests
+          import sys
+
+          try:
+              response = requests.get("http://127.0.0.1:5000/")  # Change port if needed
+              assert response.status_code == 200
+              print("✅ Endpoint responded successfully:", response.json())
+          except Exception as e:
+              print("❌ Endpoint test failed:", e)
+              sys.exit(1)
+          EOF
+
+                  # Kill the app after testing
+                  kill $APP_PID
+                  echo "App stopped"
