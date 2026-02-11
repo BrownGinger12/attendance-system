@@ -12,13 +12,11 @@ jobs:
     steps:
       - name: Send webhook request
         run: |
-          WEBHOOK_URL="https://api.selim-dev.online/update"
+          WEBHOOK_URL="${{ vars.WEBHOOK_URL }}"
           SECRET="${{ secrets.WEBHOOK_SECRET }}"
           BODY='{"ref":"main"}'
 
-          SIGNATURE=$(echo -n "$BODY" | openssl dgst -sha256 -hmac "$SECRET" | sed 's/^.* //')
-
           curl -X POST $WEBHOOK_URL \
-               -H "Content-Type: application/json" \
-               -H "X-Hub-Signature-256: sha256=$SIGNATURE" \
+                -H "Authorization: Bearer "$SECRET" \
+                -H "Content-Type: application/json" \
                -d "$BODY"
