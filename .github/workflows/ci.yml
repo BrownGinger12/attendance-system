@@ -1,9 +1,6 @@
-name: Test Python App & Trigger Webhook
+name: Test Python App
 
 on:
-  push:
-    branches:
-      - main
   pull_request:
     branches:
       - main
@@ -37,10 +34,16 @@ jobs:
           APP_PID=$!
           echo "App started with PID $APP_PID"
 
-          # Wait a few seconds for the app to start
-          sleep 5
+          # Wait until server responds (max 15s)
+          for i in {1..15}; do
+            if curl -s http://127.0.0.1:5000/ > /dev/null; then
+              echo "Server is ready"
+              break
+            fi
+            echo "Waiting for server..."
+            sleep 1
+          done
 
-          # Test the main endpoint
           python - <<'EOF'
           import requests
           import sys
@@ -57,16 +60,3 @@ jobs:
                   # Kill the app after testing
                   kill $APP_PID
                   echo "App stopped"
-
-      - name: Send webhook request
-        run: |
-          WEBHOOK_URL="https://api.selim-dev.online/update"
-          SECRET="${{ secrets.WEBHOOK_SECRET }}"
-          BODY='{"ref":"main"}'
-
-          SIGNATURE=$(echo -n "$BODY" | openssl dgst -sha256 -hmac "$SECRET" | sed 's/^.* //')
-
-          curl -X POST $WEBHOOK_URL \
-               -H "Content-Type: application/json" \
-               -H "X-Hub-Signature-256: sha256=$SIGNATURE" \
-               -d "$BODY"

@@ -1,0 +1,24 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Send webhook request
+        run: |
+          WEBHOOK_URL="https://api.selim-dev.online/update"
+          SECRET="${{ secrets.WEBHOOK_SECRET }}"
+          BODY='{"ref":"main"}'
+
+          SIGNATURE=$(echo -n "$BODY" | openssl dgst -sha256 -hmac "$SECRET" | sed 's/^.* //')
+
+          curl -X POST $WEBHOOK_URL \
+               -H "Content-Type: application/json" \
+               -H "X-Hub-Signature-256: sha256=$SIGNATURE" \
+               -d "$BODY"
