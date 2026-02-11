@@ -196,33 +196,30 @@ def read_root():
 # ------------------------------
 # GitHub Webhook for Auto-Update
 # ------------------------------
-GITHUB_SECRET = os.environ.get("WEBHOOK_SECRET", "mysecret123")
+GITHUB_SECRET = "your-secret-here"  # must match GitHub repo secret
 
 def verify_signature(payload, signature):
-    mac = hmac.new(GITHUB_SECRET.encode(), msg=payload, digestmod=hashlib.sha256)
-    return hmac.compare_digest("sha256=" + mac.hexdigest(), signature)
+    if not signature:
+        return False
+
+    mac = hmac.new(
+        GITHUB_SECRET.encode(),
+        msg=payload,
+        digestmod=hashlib.sha256
+    )
+    expected = "sha256=" + mac.hexdigest()
+    return hmac.compare_digest(expected, signature)
 
 @app.route("/update", methods=["POST"])
 def update_code():
-    signature = request.headers.get("X-Hub-Signature-256", "")
+    signature = request.headers.get("X-Hub-Signature-256")
     payload = request.data
 
-    # Optional: verify GitHub signature
     if not verify_signature(payload, signature):
         return jsonify({"status": "unauthorized"}), 401
 
-    try:
-        # Pull latest changes
-        result = subprocess.run(["git", "pull"], capture_output=True, text=True)
-        # Optional: restart server (if using gunicorn/uvicorn etc.)
-        # subprocess.run(["systemctl", "restart", "my-app.service"])
-        return jsonify({
-            "status": "success",
-            "output": result.stdout,
-            "error": result.stderr
-        })
-    except Exception as e:
-        return jsonify({"status": "failed", "error": str(e)}), 500
+    return jsonify({"status": "verified"}), 200
+
 
         
 # ------------------------------
