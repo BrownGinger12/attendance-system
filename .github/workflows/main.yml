@@ -30,6 +30,8 @@ jobs:
     - name: Run app briefly and test endpoint
       run: |
         # Start the app in the background
+        cd backend
+        
         nohup python app.py &
         APP_PID=$!
         echo "App started with PID $APP_PID"
