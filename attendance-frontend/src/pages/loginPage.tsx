@@ -66,8 +66,12 @@ const LoginPage: React.FC = () => {
 
       <div className="w-full max-w-md animate-fadeIn">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-slate-900 border border-slate-800 rounded-2xl mb-4">
-            <Lock className="w-8 h-8 text-slate-400" />
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4">
+            <img
+              src={`${import.meta.env.BASE_URL}deped_logo.png`}
+              alt="DEPED Logo"
+              className="w-15 h-15 object-contain"
+            />
           </div>
           <h1 className="text-3xl font-semibold text-white mb-2">
             Welcome Back

@@ -80,7 +80,7 @@ const Navbar: React.FC = () => {
               {/* Logo */}
               <div className="w-10 h-10 bg-slate-800 rounded-lg flex items-center justify-center">
                 <img
-                  src="/deped_logo.png"
+                  src={`${import.meta.env.BASE_URL}deped_logo.png`}
                   alt="DEPED Logo"
                   className="w-full h-full object-contain"
                 />
