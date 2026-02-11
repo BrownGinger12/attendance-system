@@ -30,6 +30,7 @@ jobs:
     - name: Run app briefly and test endpoint
       run: |
         # Start the app in the background
+        cd ..
         cd backend
         
         nohup python app.py &
