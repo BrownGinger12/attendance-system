@@ -196,32 +196,19 @@ def read_root():
 # ------------------------------
 # GitHub Webhook for Auto-Update
 # ------------------------------
-GITHUB_SECRET = "your-secret-here"  # must match GitHub repo secret
-
-def verify_signature(payload, signature):
-    if not signature:
-        return False
-
-    mac = hmac.new(
-        GITHUB_SECRET.encode(),
-        msg=payload,
-        digestmod=hashlib.sha256
-    )
-    expected = "sha256=" + mac.hexdigest()
-    return hmac.compare_digest(expected, signature)
+GITHUB_SECRET = os.getenv("WEBHOOK_SECRET")
 
 @app.route("/update", methods=["POST"])
 def update_code():
-    signature = request.headers.get("X-Hub-Signature-256")
-    payload = request.data
+    # Expect header: Authorization: Bearer <secret>
+    auth_header = request.headers.get("Authorization", "")
+    expected = f"Bearer {GITHUB_SECRET}"
 
-    if not verify_signature(payload, signature):
+    if auth_header != expected:
         return jsonify({"status": "unauthorized"}), 401
 
     return jsonify({"status": "verified"}), 200
 
-
-        
 # ------------------------------
 # Run the app
 # ------------------------------
