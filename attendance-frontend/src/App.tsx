@@ -13,7 +13,7 @@ import NotFoundPage from "./pages/notFoundPage";
 
 export default function App() {
   return (
-    <Router basename="/attendance">
+    <Router>
       <AuthProvider>
         <div className="w-full h-screen">
           <Routes>

@@ -1,4 +1,7 @@
 # app.py
+from asyncio import subprocess
+import hashlib
+import hmac
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 from flask_socketio import SocketIO, emit
@@ -180,6 +183,46 @@ def fill_dtr_json():
         import traceback
         print(traceback.format_exc())  # This will help debug
         return jsonify({'error': str(e)}), 500
+    
+
+# ------------------------------
+# Health check endpoint
+# ------------------------------
+@app.get("/")
+def read_root():
+    return {"message": "Hello World"}, 200
+
+
+# ------------------------------
+# GitHub Webhook for Auto-Update
+# ------------------------------
+GITHUB_SECRET = os.environ.get("WEBHOOK_SECRET", "mysecret123")
+
+def verify_signature(payload, signature):
+    mac = hmac.new(GITHUB_SECRET.encode(), msg=payload, digestmod=hashlib.sha256)
+    return hmac.compare_digest("sha256=" + mac.hexdigest(), signature)
+
+@app.route("/update", methods=["POST"])
+def update_code():
+    signature = request.headers.get("X-Hub-Signature-256", "")
+    payload = request.data
+
+    # Optional: verify GitHub signature
+    if not verify_signature(payload, signature):
+        return jsonify({"status": "unauthorized"}), 401
+
+    try:
+        # Pull latest changes
+        result = subprocess.run(["git", "pull"], capture_output=True, text=True)
+        # Optional: restart server (if using gunicorn/uvicorn etc.)
+        # subprocess.run(["systemctl", "restart", "my-app.service"])
+        return jsonify({
+            "status": "success",
+            "output": result.stdout,
+            "error": result.stderr
+        })
+    except Exception as e:
+        return jsonify({"status": "failed", "error": str(e)}), 500
 
         
 # ------------------------------
