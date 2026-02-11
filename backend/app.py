@@ -190,7 +190,7 @@ def fill_dtr_json():
 # ------------------------------
 @app.get("/")
 def read_root():
-    return {"message": "Hello World"}, 200
+    return {"message": "health checkk!!!!!"}, 200
 
 
 # ------------------------------
