@@ -51,7 +51,10 @@ const RealtimeAttendancePage: React.FC = () => {
 
     fetchTotalEmployees();
 
-    const socket = io("http://10.10.10.2:5000/attendance", {
+    const API_URL = import.meta.env.VITE_API_URL;
+
+    // Connect to the attendance namespace
+    const socket = io(`${API_URL}/attendance`, {
       path: "/socket.io",
       transports: ["websocket"],
       reconnection: true,

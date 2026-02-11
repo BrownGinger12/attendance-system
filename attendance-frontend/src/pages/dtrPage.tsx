@@ -174,13 +174,16 @@ const DTRPage: React.FC = () => {
       };
 
       // Call the export DTR API through the service
-      const response = await fetch("http://10.10.10.2:5000/api/fill-dtr-json", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL}/api/fill-dtr-json`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
         },
-        body: JSON.stringify(payload),
-      });
+      );
 
       if (!response.ok) {
         throw new Error("Failed to export DTR");
