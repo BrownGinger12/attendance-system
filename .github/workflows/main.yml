@@ -32,8 +32,6 @@ jobs:
         # Start the app in the background
         pwd
         ls -R
-        cd ..
-        cd backend
         
         nohup python app.py &
         APP_PID=$!
