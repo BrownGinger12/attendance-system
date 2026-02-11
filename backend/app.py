@@ -1,6 +1,5 @@
 # app.py
 from flask import Flask, request, jsonify, send_file
-from flaredantic import FlareTunnel, FlareConfig
 from flask_cors import CORS
 from flask_socketio import SocketIO, emit
 import os
@@ -182,21 +181,11 @@ def fill_dtr_json():
         print(traceback.format_exc())  # This will help debug
         return jsonify({'error': str(e)}), 500
 
-
-
-def run_tunnel():
-    config = FlareConfig(port=5000, verbose=True)
-    with FlareTunnel(config) as tunnel:
-        print("🌍 Public URL:", tunnel.tunnel_url)
-
-        while True:
-            time.sleep(60)
         
 # ------------------------------
 # Run the app
 # ------------------------------
 if __name__ == "__main__":
-    threading.Thread(target=run_tunnel, daemon=True).start()
 
     socketio.run(
         app,
