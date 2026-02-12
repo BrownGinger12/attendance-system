@@ -83,6 +83,25 @@ def delete_employee(user_id: int):
         return jsonify({"message": str(e)}), 400
     except Exception as e:
         return jsonify({"message": str(e)}), 500
+    
+def get_employee_by_badge():
+    """
+    Fetch an employee by their badge number (Badgenumber)
+    Expects a query parameter: ?badge=<badge_number>
+    """
+    try:
+        badge_number = request.args.get("badge", default="", type=str).strip()
+
+        if not badge_number:
+            return jsonify({"message": "Badge number is required"}), 400
+
+        result = Employee.get_by_badge(badge_number)
+        return jsonify(result), result["statusCode"]
+
+    except ValidationError as e:
+        return jsonify({"message": str(e)}), 400
+    except Exception as e:
+        return jsonify({"message": str(e)}), 500
 
 def search_employees():
     try:

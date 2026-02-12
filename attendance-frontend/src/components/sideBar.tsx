@@ -26,6 +26,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     { id: "employeeStat", icon: UserStar, label: "Employee Statistics" },
     { id: "attendance", icon: FileText, label: "Attendance Record" },
     { id: "realtimeAttendance", icon: Gauge, label: "Real-time Attendance" },
+    { id: "departments", icon: Gauge, label: "Departments" },
   ];
 
   return (

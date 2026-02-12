@@ -20,7 +20,8 @@ from handler.employee_handler import (
     get_user_fingerprints,
     search_employees,
     update_employee,
-    get_employee_count
+    get_employee_count,
+    get_employee_by_badge
 )
 from handler.attendance_record_handler import (
     get_attendance_month,
@@ -126,6 +127,10 @@ def get_fingerprints_route(user_id):
 def export_excel_route():
     return export_employees_to_excel()
 
+@app.route("/employee/badge", methods=["GET"])
+def employee_by_badge_route():
+    return get_employee_by_badge()
+
 # ------------------------------
 # Attendance endpoints
 # ------------------------------
@@ -190,7 +195,7 @@ def fill_dtr_json():
 # ------------------------------
 @app.get("/")
 def read_root():
-    return {"message": "Hello World"}, 200
+    return {"message": "health checkk!!!!!"}, 200
 
 
 # ------------------------------
