@@ -12,7 +12,7 @@ jobs:
     steps:
       - name: Send webhook request
         run: |
-          WEBHOOK_URL="${{ vars.WEBHOOK_URL }}"
+          WEBHOOK_URL="${{ secrets.WEBHOOK_URL }}"
           SECRET="${{ secrets.WEBHOOK_SECRET }}"
           BODY='{"ref":"main"}'
 
