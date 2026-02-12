@@ -155,3 +155,13 @@ def export_employees_to_excel():
     except Exception as e:
         print(f"Export handler error: {e}")
         return jsonify({'error': str(e)}), 500
+    
+def get_employees_by_department(dept_id: int):
+    try:
+        result = Employee.get_by_department(dept_id)
+        return jsonify(result), result["statusCode"]
+
+    except ValidationError as e:
+        return jsonify({"message": str(e)}), 400
+    except Exception as e:
+        return jsonify({"message": str(e)}), 500

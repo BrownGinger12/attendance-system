@@ -228,3 +228,36 @@ class Employee(BaseModel):
             }
         except Exception as e:
             return {"statusCode": 500, "message": str(e)}
+
+    @staticmethod
+    def get_by_department(dept_id: int):
+        try:
+            sql = """
+            SELECT *
+            FROM employees
+            WHERE DEFAULTDEPTID = %s
+            ORDER BY USERID
+            """
+            rows = fetch_query(sql, [dept_id])
+
+            if not rows:
+                return {
+                    "statusCode": 404,
+                    "message": "No employees found for this department"
+                }
+
+            # Convert bytes (e.g., PHOTO) to base64
+            for row in rows:
+                for k, v in row.items():
+                    if isinstance(v, bytes):
+                        row[k] = base64.b64encode(v).decode("utf-8")
+
+            return {
+                "statusCode": 200,
+                "department_id": dept_id,
+                "count": len(rows),
+                "data": rows
+            }
+
+        except Exception as e:
+            return {"statusCode": 500, "message": str(e)}

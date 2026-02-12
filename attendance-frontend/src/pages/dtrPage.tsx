@@ -7,10 +7,12 @@ import {
   Clock,
   ChevronLeft,
   ChevronRight,
+  AlertCircle,
 } from "lucide-react";
 import employeeService, {
   Employee,
   AttendanceRecord,
+  EmployeeDetail,
 } from "../services/employeeService";
 
 interface GroupedAttendance {
@@ -22,28 +24,17 @@ interface GroupedAttendance {
 }
 
 const DTRPage: React.FC = () => {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<Employee[]>([]);
-  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(
-    null,
-  );
+  const [badgeNumber, setBadgeNumber] = useState("");
+  const [selectedEmployee, setSelectedEmployee] =
+    useState<EmployeeDetail | null>(null);
   const [selectedMonth, setSelectedMonth] = useState<string>(
     new Date().toISOString().slice(0, 7),
   );
   const [attendanceData, setAttendanceData] = useState<GroupedAttendance[]>([]);
   const [loading, setLoading] = useState(false);
-  const [_searching, setSearching] = useState(false);
+  const [searching, setSearching] = useState(false);
   const [exporting, setExporting] = useState(false);
-  const [showResults, setShowResults] = useState(false);
-
-  useEffect(() => {
-    if (searchQuery.length >= 2) {
-      searchEmployees();
-    } else {
-      setSearchResults([]);
-      setShowResults(false);
-    }
-  }, [searchQuery]);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (selectedEmployee) {
@@ -51,20 +42,43 @@ const DTRPage: React.FC = () => {
     }
   }, [selectedEmployee, selectedMonth]);
 
-  const searchEmployees = async () => {
+  const handleBadgeSearch = async () => {
+    if (!badgeNumber.trim()) {
+      setError("Please enter a badge number");
+      return;
+    }
+
     setSearching(true);
+    setError(null);
+    setSelectedEmployee(null);
+    setAttendanceData([]);
+
     try {
-      const response = await employeeService.searchEmployees(
-        searchQuery,
-        1,
-        10,
+      const response = await employeeService.getEmployeeByBadge(
+        badgeNumber.trim(),
       );
-      setSearchResults(response.data);
-      setShowResults(true);
-    } catch (err) {
-      console.error("Error searching employees:", err);
+
+      if (response.statusCode === 200 && response.data) {
+        setSelectedEmployee(response.data);
+        setError(null);
+      } else {
+        setError("Employee does not exist");
+      }
+    } catch (err: any) {
+      console.error("Error fetching employee:", err);
+      if (err.response?.status === 404) {
+        setError("Employee does not exist");
+      } else {
+        setError("Failed to fetch employee. Please try again.");
+      }
     } finally {
       setSearching(false);
+    }
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      handleBadgeSearch();
     }
   };
 
@@ -144,12 +158,6 @@ const DTRPage: React.FC = () => {
     });
 
     return Object.values(grouped).sort((a, b) => a.date.localeCompare(b.date));
-  };
-
-  const handleSelectEmployee = (employee: Employee) => {
-    setSelectedEmployee(employee);
-    setShowResults(false);
-    setSearchQuery("");
   };
 
   const handleExportDTR = async () => {
@@ -239,47 +247,48 @@ const DTRPage: React.FC = () => {
             Daily Time Record
           </h1>
           <p className="text-blue-700 text-sm md:text-base">
-            Search and view employee attendance records
+            Enter badge number to view employee attendance records
           </p>
         </div>
 
-        {/* Search Section */}
+        {/* Badge Number Search Section */}
         <div className="bg-white rounded-2xl shadow-lg p-4 md:p-6 mb-6 border-2 border-blue-100">
-          <div className="relative">
-            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-blue-400" />
-            <input
-              type="text"
-              placeholder="Search employee by name or ID..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-12 pr-4 py-3 md:py-4 bg-blue-50 border-2 border-blue-200 rounded-xl text-blue-900 placeholder-blue-400 focus:outline-none focus:border-yellow-400 transition-colors text-base md:text-lg"
-            />
+          <div className="flex gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-blue-400" />
+              <input
+                type="text"
+                placeholder="Enter employee badge number..."
+                value={badgeNumber}
+                onChange={(e) => setBadgeNumber(e.target.value)}
+                onKeyPress={handleKeyPress}
+                className="w-full pl-12 pr-4 py-3 md:py-4 bg-blue-50 border-2 border-blue-200 rounded-xl text-blue-900 placeholder-blue-400 focus:outline-none focus:border-yellow-400 transition-colors text-base md:text-lg"
+              />
+            </div>
+            <button
+              onClick={handleBadgeSearch}
+              disabled={searching || !badgeNumber.trim()}
+              className="px-6 py-3 md:py-4 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold rounded-xl shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              {searching ? (
+                <>
+                  <Clock className="w-5 h-5 animate-spin" />
+                  Searching...
+                </>
+              ) : (
+                <>
+                  <Search className="w-5 h-5" />
+                  Search
+                </>
+              )}
+            </button>
           </div>
 
-          {/* Search Results Dropdown */}
-          {showResults && searchResults.length > 0 && (
-            <div className="mt-3 bg-white border-2 border-blue-200 rounded-xl shadow-xl max-h-64 overflow-y-auto">
-              {searchResults.map((employee) => (
-                <button
-                  key={employee.userid}
-                  onClick={() => handleSelectEmployee(employee)}
-                  className="w-full px-4 py-3 text-left hover:bg-yellow-50 transition-colors border-b border-blue-100 last:border-b-0"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                      <User className="w-5 h-5 text-blue-600" />
-                    </div>
-                    <div>
-                      <p className="font-semibold text-blue-900">
-                        {employee.name}
-                      </p>
-                      <p className="text-sm text-blue-600">
-                        ID: {employee.badgenumber}
-                      </p>
-                    </div>
-                  </div>
-                </button>
-              ))}
+          {/* Error Message */}
+          {error && (
+            <div className="mt-4 p-4 bg-red-50 border-2 border-red-200 rounded-xl flex items-center gap-3">
+              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
+              <p className="text-red-700 font-medium">{error}</p>
             </div>
           )}
         </div>
@@ -475,7 +484,7 @@ const DTRPage: React.FC = () => {
         )}
 
         {/* Empty State */}
-        {!selectedEmployee && (
+        {!selectedEmployee && !error && (
           <div className="bg-white rounded-2xl shadow-lg p-12 text-center border-2 border-blue-100">
             <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <Search className="w-10 h-10 text-blue-600" />
@@ -484,8 +493,8 @@ const DTRPage: React.FC = () => {
               Search for an Employee
             </h3>
             <p className="text-blue-600">
-              Enter an employee name or ID in the search box above to view their
-              DTR
+              Enter an employee badge number in the search box above to view
+              their DTR
             </p>
           </div>
         )}

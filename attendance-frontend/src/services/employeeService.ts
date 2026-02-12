@@ -202,6 +202,19 @@ export const employeeService = {
     return response.data;
   },
 
+  // Get employee by badge number
+  getEmployeeByBadge: async (
+    badgeNumber: string,
+  ): Promise<EmployeeDetailResponse> => {
+    const response = await apiClient.get<EmployeeDetailResponse>(
+      `/employee/badge`,
+      {
+        params: { badge: badgeNumber },
+      },
+    );
+    return response.data;
+  },
+
   // Update employee
   updateEmployee: async (
     userId: number,

@@ -21,7 +21,8 @@ from handler.employee_handler import (
     search_employees,
     update_employee,
     get_employee_count,
-    get_employee_by_badge
+    get_employee_by_badge,
+    get_employees_by_department
 )
 from handler.attendance_record_handler import (
     get_attendance_month,
@@ -130,6 +131,9 @@ def export_excel_route():
 @app.route("/employee/badge", methods=["GET"])
 def employee_by_badge_route():
     return get_employee_by_badge()
+@app.route("/employees/department/<int:dept_id>", methods=["GET"])
+def employees_by_department_route(dept_id):
+    return get_employees_by_department(dept_id)
 
 # ------------------------------
 # Attendance endpoints
