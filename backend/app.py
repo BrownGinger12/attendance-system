@@ -195,7 +195,7 @@ def fill_dtr_json():
 # ------------------------------
 @app.get("/")
 def read_root():
-    return {"message": "health checkk!!!!!"}, 200
+    return {"message": "server health check!"}, 200
 
 
 # ------------------------------
