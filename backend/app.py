@@ -205,14 +205,37 @@ GITHUB_SECRET = os.getenv("WEBHOOK_SECRET")
 
 @app.route("/update", methods=["POST"])
 def update_code():
-    # Expect header: Authorization: Bearer <secret>
     auth_header = request.headers.get("Authorization", "")
     expected = f"Bearer {GITHUB_SECRET}"
 
     if auth_header != expected:
         return jsonify({"status": "unauthorized"}), 401
 
-    return jsonify({"status": "verified"}), 200
+    try:
+        # Pull the latest code from the GitHub repository
+        result = subprocess.run(
+            ["git", "pull", "origin", "main"],  # replace 'main' with your default branch if needed
+            capture_output=True,
+            text=True
+        )
+
+        if result.returncode != 0:
+            # Git pull failed
+            return jsonify({
+                "status": "error",
+                "message": result.stderr
+            }), 500
+
+        # Optionally: restart the app here if needed
+        # WARNING: auto-restart in production may require a process manager like Gunicorn, PM2, or systemd
+
+        return jsonify({
+            "status": "success",
+            "message": result.stdout
+        }), 200
+
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 # ------------------------------
 # Run the app
