@@ -128,6 +128,30 @@ class Employee(BaseModel):
             return {"statusCode": 200, "data": row}
         except Exception as e:
             return {"statusCode": 500, "message": str(e)}
+    
+    @staticmethod
+    def get_by_badge(badge_number: str):
+        try:
+            sql = "SELECT * FROM employees WHERE Badgenumber = %s"
+            rows = fetch_query(sql, [badge_number])
+
+            if not rows:
+                return {"statusCode": 404, "message": "Employee not found"}
+
+            row = rows[0]
+            photo = row.get("PHOTO")
+            if photo:
+                if isinstance(photo, str):
+                    row["PHOTO"] = photo.strip()
+                elif isinstance(photo, bytes):
+                    try:
+                        row["PHOTO"] = photo.decode("utf-16-le").strip()
+                    except UnicodeDecodeError:
+                        row["PHOTO"] = base64.b64encode(photo).decode("utf-8")
+
+            return {"statusCode": 200, "data": row}
+        except Exception as e:
+            return {"statusCode": 500, "message": str(e)}
 
     @staticmethod
     def update(user_id: int, data: dict):
