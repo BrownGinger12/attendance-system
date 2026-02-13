@@ -34,3 +34,21 @@ def get_attendance_employee():
 
     except Exception as e:
         return jsonify({"message": str(e)}), 500
+
+def edit_attendance():
+    try:
+        record_id = request.args.get("id", type=int)
+
+        if not record_id:
+            return jsonify({"message": "id parameter is required"}), 400
+
+        data = request.get_json()
+
+        if not data:
+            return jsonify({"message": "JSON body is required"}), 400
+
+        result = AttendanceRecord.edit_by_id(record_id, data)
+        return jsonify(result), result["statusCode"]
+
+    except Exception as e:
+        return jsonify({"message": str(e)}), 500

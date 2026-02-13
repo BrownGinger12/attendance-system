@@ -57,7 +57,7 @@ class AttendanceRecord(BaseModel):
             return {"statusCode": 200, "count": len(rows), "data": rows} if rows else {
                 "statusCode": 404,
                 "message": f"No attendance found for {date_str}"
-            }
+            }   
         except Exception as e:
             return {"statusCode": 500, "message": str(e)}
 
@@ -104,3 +104,61 @@ class AttendanceRecord(BaseModel):
         except Exception as e:
             print("Attendance watcher error:", e)
             return []
+    
+        # --------------------------
+    # Edit attendance record by ID
+    # --------------------------
+    @staticmethod
+    def edit_by_id(record_id: int, data: dict):
+        try:
+            if not data:
+                return {
+                    "statusCode": 400,
+                    "message": "No fields provided for update"
+                }
+
+            allowed_fields = [
+                "userid",
+                "checktime",
+                "checktype",
+                "verifycode",
+                "sensorid",
+                "sn"
+            ]
+
+            update_fields = []
+            params = []
+
+            for key, value in data.items():
+                if key in allowed_fields:
+                    update_fields.append(f"{key} = %s")
+                    params.append(value)
+
+            if not update_fields:
+                return {
+                    "statusCode": 400,
+                    "message": "No valid fields to update"
+                }
+
+            sql = f"""
+                UPDATE attendance
+                SET {', '.join(update_fields)}
+                WHERE id = %s
+            """
+
+            params.append(record_id)
+
+            from gateway.mysql_gateway import query
+            result = query(sql, params)
+
+            return {
+                "statusCode": 200,
+                "message": f"Attendance record {record_id} updated successfully"
+            }
+
+        except Exception as e:
+            return {
+                "statusCode": 500,
+                "message": str(e)
+            }
+

@@ -10,7 +10,6 @@ import {
   AlertCircle,
 } from "lucide-react";
 import employeeService, {
-  Employee,
   AttendanceRecord,
   EmployeeDetail,
 } from "../services/employeeService";
