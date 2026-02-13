@@ -2,6 +2,8 @@ from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
 from gateway.mysql_gateway import fetch_query
+from email.utils import parsedate_to_datetime
+
 
 class AttendanceRecord(BaseModel):
     id: Optional[int] = None
@@ -108,6 +110,7 @@ class AttendanceRecord(BaseModel):
         # --------------------------
     # Edit attendance record by ID
     # --------------------------
+
     @staticmethod
     def edit_by_id(record_id: int, data: dict):
         try:
@@ -130,9 +133,38 @@ class AttendanceRecord(BaseModel):
             params = []
 
             for key, value in data.items():
-                if key in allowed_fields:
-                    update_fields.append(f"{key} = %s")
-                    params.append(value)
+                if key not in allowed_fields:
+                    continue
+
+                # ✅ Force checktime to datetime
+                if key == "checktime":
+                    if isinstance(value, str):
+                        try:
+                            # Try ISO format first
+                            try:
+                                value = datetime.fromisoformat(value.replace("Z", "+00:00"))
+                            except ValueError:
+                                # Try GMT format (Fri, 13 Feb 2026 08:07:21 GMT)
+                                value = parsedate_to_datetime(value)
+
+                            # Remove timezone (MySQL DATETIME usually naive)
+                            if value.tzinfo:
+                                value = value.replace(tzinfo=None)
+
+                        except Exception:
+                            return {
+                                "statusCode": 400,
+                                "message": "Invalid datetime format for checktime"
+                            }
+
+                    elif not isinstance(value, datetime):
+                        return {
+                            "statusCode": 400,
+                            "message": "checktime must be a datetime or valid datetime string"
+                        }
+
+                update_fields.append(f"{key} = %s")
+                params.append(value)
 
             if not update_fields:
                 return {
@@ -149,7 +181,7 @@ class AttendanceRecord(BaseModel):
             params.append(record_id)
 
             from gateway.mysql_gateway import query
-            result = query(sql, params)
+            query(sql, params)
 
             return {
                 "statusCode": 200,
@@ -161,4 +193,3 @@ class AttendanceRecord(BaseModel):
                 "statusCode": 500,
                 "message": str(e)
             }
-
