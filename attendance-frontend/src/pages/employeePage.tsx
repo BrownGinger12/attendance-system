@@ -132,8 +132,8 @@ const EmployeePage: React.FC = () => {
 
   // Get department name by ID
   const getDepartmentName = (deptId: number): string => {
-    const department = departments.find((dept) => dept.DEPTID === deptId);
-    return department ? department.DEPTNAME : `Dept ${deptId}`;
+    const department = departments.find((dept) => dept.deptid === deptId);
+    return department ? department.deptname : `Dept ${deptId}`;
   };
 
   // No client-side filtering needed anymore - handled by API

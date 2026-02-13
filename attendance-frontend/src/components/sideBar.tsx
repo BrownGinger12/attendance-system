@@ -6,6 +6,7 @@ import {
   GaugeCircle,
   Gauge,
   UserStar,
+  Building2,
 } from "lucide-react";
 
 interface SidebarProps {
@@ -26,7 +27,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     { id: "employeeStat", icon: UserStar, label: "Employee Statistics" },
     { id: "attendance", icon: FileText, label: "Attendance Record" },
     { id: "realtimeAttendance", icon: Gauge, label: "Real-time Attendance" },
-    { id: "departments", icon: Gauge, label: "Departments" },
+    { id: "departments", icon: Building2, label: "Departments" },
   ];
 
   return (

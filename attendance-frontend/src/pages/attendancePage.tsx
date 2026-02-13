@@ -134,8 +134,25 @@ const AttendanceRecordPage: React.FC = () => {
       pmRecords.sort((a, b) => a.time.localeCompare(b.time));
 
       // Process AM records
-      const amCheckIns = amRecords.filter((r) => r.type === "I");
-      const amCheckOuts = amRecords.filter((r) => r.type === "O");
+      let amCheckIns = amRecords.filter((r) => r.type === "I");
+      let amCheckOuts = amRecords.filter((r) => r.type === "O");
+
+      // Reclassify AM check-ins at 11:00 AM or later as check-outs
+      const amInsToReclassify: typeof amRecords = [];
+      amCheckIns = amCheckIns.filter((r) => {
+        const hour = parseInt(r.time.split(":")[0]);
+
+        // If check-in is at 11:00 AM or later, treat it as check-out
+        if (hour >= 11) {
+          amInsToReclassify.push(r);
+          return false; // Remove from check-ins
+        }
+        return true; // Keep as check-in
+      });
+
+      // Add reclassified logs to check-outs
+      amCheckOuts = [...amCheckOuts, ...amInsToReclassify];
+      amCheckOuts.sort((a, b) => a.time.localeCompare(b.time));
 
       if (amCheckIns.length > 0) {
         // Get earliest AM check-in
@@ -151,8 +168,25 @@ const AttendanceRecordPage: React.FC = () => {
       }
 
       // Process PM records
-      const pmCheckIns = pmRecords.filter((r) => r.type === "I");
-      const pmCheckOuts = pmRecords.filter((r) => r.type === "O");
+      let pmCheckIns = pmRecords.filter((r) => r.type === "I");
+      let pmCheckOuts = pmRecords.filter((r) => r.type === "O");
+
+      // Reclassify PM check-ins at 4:00 PM or later as check-outs
+      const pmInsToReclassify: typeof pmRecords = [];
+      pmCheckIns = pmCheckIns.filter((r) => {
+        const hour = parseInt(r.time.split(":")[0]);
+
+        // If check-in is at 4:00 PM (16:00) or later, treat it as check-out
+        if (hour >= 16) {
+          pmInsToReclassify.push(r);
+          return false; // Remove from check-ins
+        }
+        return true; // Keep as check-in
+      });
+
+      // Add reclassified logs to check-outs
+      pmCheckOuts = [...pmCheckOuts, ...pmInsToReclassify];
+      pmCheckOuts.sort((a, b) => a.time.localeCompare(b.time));
 
       if (pmCheckIns.length > 0) {
         // Get earliest PM check-in

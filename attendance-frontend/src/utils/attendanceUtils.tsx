@@ -123,8 +123,29 @@ export const processAttendanceLogs = (
     );
 
     // Process AM logs
-    const amCheckIns = amLogs.filter((log) => log.checktype === "I");
-    const amCheckOuts = amLogs.filter((log) => log.checktype === "O");
+    let amCheckIns = amLogs.filter((log) => log.checktype === "I");
+    let amCheckOuts = amLogs.filter((log) => log.checktype === "O");
+
+    // Reclassify AM check-ins at 11:00 AM or later as check-outs
+    const amInsToReclassify: AttendanceLog[] = [];
+    amCheckIns = amCheckIns.filter((log) => {
+      const logDate = new Date(log.checktime);
+      const hour = logDate.getHours();
+
+      // If check-in is at 11:00 AM or later, treat it as check-out
+      if (hour >= 11) {
+        amInsToReclassify.push(log);
+        return false; // Remove from check-ins
+      }
+      return true; // Keep as check-in
+    });
+
+    // Add reclassified logs to check-outs
+    amCheckOuts = [...amCheckOuts, ...amInsToReclassify];
+    amCheckOuts.sort(
+      (a, b) =>
+        new Date(a.checktime).getTime() - new Date(b.checktime).getTime(),
+    );
 
     if (amCheckIns.length > 0) {
       // Get earliest AM check-in
@@ -149,8 +170,29 @@ export const processAttendanceLogs = (
     }
 
     // Process PM logs
-    const pmCheckIns = pmLogs.filter((log) => log.checktype === "I");
-    const pmCheckOuts = pmLogs.filter((log) => log.checktype === "O");
+    let pmCheckIns = pmLogs.filter((log) => log.checktype === "I");
+    let pmCheckOuts = pmLogs.filter((log) => log.checktype === "O");
+
+    // Reclassify PM check-ins at 4:00 PM or later as check-outs
+    const pmInsToReclassify: AttendanceLog[] = [];
+    pmCheckIns = pmCheckIns.filter((log) => {
+      const logDate = new Date(log.checktime);
+      const hour = logDate.getHours();
+
+      // If check-in is at 4:00 PM (16:00) or later, treat it as check-out
+      if (hour >= 16) {
+        pmInsToReclassify.push(log);
+        return false; // Remove from check-ins
+      }
+      return true; // Keep as check-in
+    });
+
+    // Add reclassified logs to check-outs
+    pmCheckOuts = [...pmCheckOuts, ...pmInsToReclassify];
+    pmCheckOuts.sort(
+      (a, b) =>
+        new Date(a.checktime).getTime() - new Date(b.checktime).getTime(),
+    );
 
     if (pmCheckIns.length > 0) {
       // Get earliest PM check-in

@@ -161,7 +161,21 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({
       // PM period: 12:30 PM and after
       const isAM = hour < 12 || (hour === 12 && minute < 30);
 
+      // Determine if this check-in should be reclassified as check-out
+      let effectiveCheckType = record.checktype;
+
       if (record.checktype === "I") {
+        // Reclassify AM check-ins at 11:00 AM or later as check-outs
+        if (isAM && hour >= 11) {
+          effectiveCheckType = "O";
+        }
+        // Reclassify PM check-ins at 4:00 PM or later as check-outs
+        else if (!isAM && hour >= 16) {
+          effectiveCheckType = "O";
+        }
+      }
+
+      if (effectiveCheckType === "I") {
         // Check-in: keep earliest time
         if (isAM) {
           if (!grouped[date].amCheckIn || time < grouped[date].amCheckIn!) {
@@ -172,7 +186,7 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({
             grouped[date].pmCheckIn = time;
           }
         }
-      } else if (record.checktype === "O") {
+      } else if (effectiveCheckType === "O") {
         // Check-out: keep latest time that is after check-in
         if (isAM) {
           // Only consider AM out if it's after AM in (or if no AM in yet)
@@ -239,7 +253,7 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({
       }
 
       if (editDeptId !== employee?.defaultdeptid) {
-        payload.Deptid = editDeptId;
+        payload.defaultdeptid = editDeptId;
       }
 
       if (editPhoto) {
@@ -344,8 +358,8 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({
   };
 
   const getDepartmentName = (deptId: number): string => {
-    const dept = departments.find((d) => d.DEPTID === deptId);
-    return dept ? dept.DEPTNAME : `Dept ${deptId}`;
+    const dept = departments.find((d) => d.deptid === deptId);
+    return dept ? dept.deptname : `Dept ${deptId}`;
   };
 
   const handleDeleteEmployee = async () => {
@@ -466,8 +480,8 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({
                           className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-slate-600 transition-colors"
                         >
                           {departments.map((dept) => (
-                            <option key={dept.DEPTID} value={dept.DEPTID}>
-                              {dept.DEPTNAME}
+                            <option key={dept.deptid} value={dept.deptid}>
+                              {dept.deptname}
                             </option>
                           ))}
                         </select>

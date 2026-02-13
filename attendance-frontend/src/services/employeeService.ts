@@ -10,9 +10,9 @@ export interface Employee {
 }
 
 export interface Department {
-  DEPTID: number;
-  DEPTNAME: string;
-  SUPDEPTID: number;
+  deptid: number;
+  deptname: string;
+  supdeptid: number;
   // Add other fields as needed
 }
 
@@ -211,6 +211,14 @@ export const employeeService = {
       {
         params: { badge: badgeNumber },
       },
+    );
+    return response.data;
+  },
+
+  // Get employees by department
+  getEmployeesByDepartment: async (departmentId: number): Promise<any> => {
+    const response = await apiClient.get(
+      `/employees/department/${departmentId}`,
     );
     return response.data;
   },

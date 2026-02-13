@@ -64,8 +64,26 @@ def parse_attendance_data(json_data):
 
         time_str = dt.strftime('%H:%M')
         hour = dt.hour
+        minute = dt.minute
 
+        # AUTOMATIC CORRECTION LOGIC
+        # Determine the effective check type based on time
+        effective_checktype = record['checktype']
+        
+        # Determine if this is AM or PM period
+        is_am_period = hour < 12 or (hour == 12 and minute < 30)
+        
+        # Apply correction: reclassify certain check-ins as check-outs
         if record['checktype'] == 'I':
+            # Reclassify AM check-ins at 11:00 AM or later as check-outs
+            if is_am_period and hour >= 11:
+                effective_checktype = 'O'
+            # Reclassify PM check-ins at 4:00 PM or later as check-outs
+            elif not is_am_period and hour >= 16:
+                effective_checktype = 'O'
+
+        # Store using the effective (corrected) checktype
+        if effective_checktype == 'I':
             attendance[date_key]['in'].append((time_str, hour))
         else:
             attendance[date_key]['out'].append((time_str, hour))

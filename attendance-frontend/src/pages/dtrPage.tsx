@@ -126,7 +126,21 @@ const DTRPage: React.FC = () => {
       // PM period: 12:30 PM and after
       const isAM = hour < 12 || (hour === 12 && minute < 30);
 
+      // Determine if this check-in should be reclassified as check-out
+      let effectiveCheckType = record.checktype;
+
       if (record.checktype === "I") {
+        // Reclassify AM check-ins at 11:00 AM or later as check-outs
+        if (isAM && hour >= 11) {
+          effectiveCheckType = "O";
+        }
+        // Reclassify PM check-ins at 4:00 PM or later as check-outs
+        else if (!isAM && hour >= 16) {
+          effectiveCheckType = "O";
+        }
+      }
+
+      if (effectiveCheckType === "I") {
         // Check-in: keep earliest time
         if (isAM) {
           if (!grouped[date].amCheckIn || time < grouped[date].amCheckIn!) {
@@ -137,7 +151,7 @@ const DTRPage: React.FC = () => {
             grouped[date].pmCheckIn = time;
           }
         }
-      } else if (record.checktype === "O") {
+      } else if (effectiveCheckType === "O") {
         // Check-out: keep latest time that is after check-in
         if (isAM) {
           // Only consider AM out if it's after AM in (or if no AM in yet)

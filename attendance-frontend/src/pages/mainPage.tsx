@@ -4,6 +4,7 @@ import Sidebar from "../components/sideBar";
 import EmployeePage from "./employeePage";
 import AttendanceRecordPage from "./attendancePage";
 import RealtimeAttendancePage from "./realtimeAttendancePage";
+import DepartmentsPage from "./departmentPage";
 
 const MainPage: React.FC = () => {
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(true);
@@ -34,6 +35,8 @@ const MainPage: React.FC = () => {
 
       case "realtimeAttendance":
         return <RealtimeAttendancePage />;
+      case "departments":
+        return <DepartmentsPage />;
       default:
         return <EmployeePage />;
     }
