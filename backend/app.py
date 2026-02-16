@@ -32,7 +32,9 @@ from handler.attendance_record_handler import (
 )
 from handler.employee_stats_handler import (
     get_stats_employee,
-    get_stats_month
+    get_stats_month,
+    get_all_employees_summary,
+    get_employee_detailed_stats
 )
 
 from handler.department_handler import get_departments, get_department_by_id
@@ -163,6 +165,7 @@ def attendance_edit(record_id):
 # ------------------------------
 # Employee stats endpoints
 # ------------------------------
+# Employee Daily Stats Routes
 @app.route("/employee-stats/month", methods=["GET"])
 def employee_stats_month():
     return get_stats_month()
@@ -170,6 +173,14 @@ def employee_stats_month():
 @app.route("/employee-stats/employee", methods=["GET"])
 def employee_stats_employee():
     return get_stats_employee()
+
+@app.route("/employee-stats/summary", methods=["GET"])
+def employee_stats_summary():
+    return get_all_employees_summary()
+
+@app.route("/employee-stats/detailed", methods=["GET"])
+def employee_stats_detailed():
+    return get_employee_detailed_stats()
 
 # ------------------------------
 # DTR Export endpoint

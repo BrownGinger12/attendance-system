@@ -30,3 +30,35 @@ def get_stats_employee():
 
     except Exception as e:
         return jsonify({"message": str(e)}), 500
+
+# Get summary of all employees grouped by employee for a month
+def get_all_employees_summary():
+    try:
+        month = request.args.get("month")  # format "YYYY-MM"
+        
+        if not month:
+            return jsonify({"message": "month parameter is required"}), 400
+
+        result = EmployeeDailyStats.get_all_employees_summary(month)
+        return jsonify(result), result["statusCode"]
+
+    except Exception as e:
+        return jsonify({"message": str(e)}), 500
+
+# Get detailed stats for specific employee with daily breakdown
+def get_employee_detailed_stats():
+    try:
+        user_id = request.args.get("user_id", type=int)
+        month = request.args.get("month")  # format "YYYY-MM"
+
+        if not user_id:
+            return jsonify({"message": "user_id parameter is required"}), 400
+        
+        if not month:
+            return jsonify({"message": "month parameter is required"}), 400
+
+        result = EmployeeDailyStats.get_employee_detailed_stats(user_id, month)
+        return jsonify(result), result["statusCode"]
+
+    except Exception as e:
+        return jsonify({"message": str(e)}), 500

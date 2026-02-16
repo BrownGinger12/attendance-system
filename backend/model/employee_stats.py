@@ -115,3 +115,117 @@ class EmployeeDailyStats(BaseModel):
 
         except Exception as e:
             return {"statusCode": 500, "message": str(e)}
+
+    # --------------------------
+    # Get all employee stats grouped by employee for a SPECIFIC MONTH
+    # Includes employee name and department
+    # --------------------------
+    @staticmethod
+    def get_all_employees_summary(month: str):
+        try:
+            start = datetime.strptime(month + "-01", "%Y-%m-%d")
+            if start.month == 12:
+                end = start.replace(year=start.year + 1, month=1)
+            else:
+                end = start.replace(month=start.month + 1)
+
+            sql = """
+            SELECT 
+                e.USERID,
+                e.Name as employee_name,
+                e.Badgenumber as badge_number,
+                d.deptid as department_id,
+                d.deptname as department_name,
+                COUNT(eds.id) as total_days_worked,
+                SUM(eds.am_work_seconds) as total_am_seconds,
+                SUM(eds.pm_work_seconds) as total_pm_seconds,
+                SUM(eds.total_work_seconds) as total_work_seconds,
+                ROUND(SUM(eds.total_work_seconds) / 3600, 2) as total_hours
+            FROM employee_daily_stats eds
+            INNER JOIN employees e ON eds.userid = e.USERID
+            LEFT JOIN departments d ON e.DEFAULTDEPTID = d.deptid
+            WHERE eds.work_date >= %s AND eds.work_date < %s
+            GROUP BY e.USERID, e.Name, e.Badgenumber, d.deptid, d.deptname
+            ORDER BY e.Name ASC
+            """
+            
+            rows = fetch_query(sql, [start, end])
+            
+            return {
+                "statusCode": 200,
+                "month": month,
+                "count": len(rows),
+                "data": rows
+            } if rows else {
+                "statusCode": 404,
+                "message": f"No employee stats found for {month}"
+            }
+
+        except Exception as e:
+            return {"statusCode": 500, "message": str(e)}
+
+    # --------------------------
+    # Get detailed stats for specific employee with daily breakdown
+    # --------------------------
+    @staticmethod
+    def get_employee_detailed_stats(user_id: int, month: str):
+        try:
+            start = datetime.strptime(month + "-01", "%Y-%m-%d")
+            if start.month == 12:
+                end = start.replace(year=start.year + 1, month=1)
+            else:
+                end = start.replace(month=start.month + 1)
+
+            # Get employee info
+            employee_sql = """
+            SELECT 
+                e.USERID,
+                e.Name as employee_name,
+                e.Badgenumber as badge_number,
+                d.deptid as department_id,
+                d.deptname as department_name
+            FROM employees e
+            LEFT JOIN departments d ON e.DEFAULTDEPTID = d.deptid
+            WHERE e.USERID = %s
+            """
+            employee_info = fetch_query(employee_sql, [user_id])
+            
+            if not employee_info:
+                return {
+                    "statusCode": 404,
+                    "message": f"Employee {user_id} not found"
+                }
+
+            # Get daily stats
+            stats_sql = """
+            SELECT *
+            FROM employee_daily_stats
+            WHERE userid = %s AND work_date >= %s AND work_date < %s
+            ORDER BY work_date DESC
+            """
+            daily_stats = fetch_query(stats_sql, [user_id, start, end])
+            processed_stats = EmployeeDailyStats._process_rows(daily_stats)
+
+            # Calculate summary
+            total_days = len(daily_stats)
+            total_am_seconds = sum(row.get('am_work_seconds', 0) or 0 for row in daily_stats)
+            total_pm_seconds = sum(row.get('pm_work_seconds', 0) or 0 for row in daily_stats)
+            total_work_seconds = sum(row.get('total_work_seconds', 0) or 0 for row in daily_stats)
+            total_hours = round(total_work_seconds / 3600, 2)
+
+            return {
+                "statusCode": 200,
+                "employee": employee_info[0],
+                "summary": {
+                    "month": month,
+                    "total_days_worked": total_days,
+                    "total_am_seconds": total_am_seconds,
+                    "total_pm_seconds": total_pm_seconds,
+                    "total_work_seconds": total_work_seconds,
+                    "total_hours": total_hours
+                },
+                "daily_records": processed_stats
+            }
+
+        except Exception as e:
+            return {"statusCode": 500, "message": str(e)}
