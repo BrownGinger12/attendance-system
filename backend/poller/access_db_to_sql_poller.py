@@ -4,7 +4,7 @@ import os
 import time
 import shutil
 import tempfile
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from datetime import time as dtime
 from dotenv import load_dotenv
 
@@ -65,6 +65,257 @@ def get_mysql_columns(table_name):
     mysql_cursor.close()
     mysql_conn.close()
     return columns
+
+# ------------------------
+# Update Employee Daily Stats
+# ------------------------
+def update_employee_daily_stats(affected_dates):
+    """
+    Update ONLY existing employee_daily_stats records (no inserts)
+    """
+    try:
+        if not affected_dates:
+            return
+
+        mysql_conn = get_mysql_conn()
+        mysql_cursor = mysql_conn.cursor()
+
+        for work_date in affected_dates:
+            sql = """
+            UPDATE employee_daily_stats eds
+            INNER JOIN (
+                SELECT
+                    t.userid,
+                    DATE(t.checktime) AS work_date,
+                    
+                    /* ===================== AM ===================== */
+                    MIN(CASE 
+                        WHEN t.checktype = 'I' 
+                        AND TIME(t.checktime) < '12:30:00'
+                        AND TIME(t.checktime) < '11:00:00'
+                        THEN TIME(t.checktime) 
+                    END) AS am_time_in,
+                    
+                    MAX(CASE 
+                        WHEN TIME(t.checktime) < '12:30:00'
+                        AND (
+                            t.checktype = 'O'
+                            OR (t.checktype = 'I' AND TIME(t.checktime) >= '11:00:00')
+                        )
+                        THEN TIME(t.checktime)
+                    END) AS am_time_out,
+                    
+                    CASE
+                        WHEN MIN(CASE 
+                            WHEN t.checktype = 'I' 
+                            AND TIME(t.checktime) < '12:30:00'
+                            AND TIME(t.checktime) < '11:00:00'
+                            THEN TIME(t.checktime) 
+                        END) IS NOT NULL
+                        AND MAX(CASE 
+                            WHEN TIME(t.checktime) < '12:30:00'
+                            AND (
+                                t.checktype = 'O'
+                                OR (t.checktype = 'I' AND TIME(t.checktime) >= '11:00:00')
+                            )
+                            THEN TIME(t.checktime)
+                        END) IS NOT NULL
+                        THEN TIMESTAMPDIFF(SECOND,
+                            CONCAT(DATE(t.checktime), ' ', MIN(CASE 
+                                WHEN t.checktype = 'I' 
+                                AND TIME(t.checktime) < '12:30:00'
+                                AND TIME(t.checktime) < '11:00:00'
+                                THEN TIME(t.checktime) 
+                            END)),
+                            CONCAT(DATE(t.checktime), ' ', 
+                                LEAST(
+                                    MAX(CASE 
+                                        WHEN TIME(t.checktime) < '12:30:00'
+                                        AND (
+                                            t.checktype = 'O'
+                                            OR (t.checktype = 'I' AND TIME(t.checktime) >= '11:00:00')
+                                        )
+                                        THEN TIME(t.checktime)
+                                    END),
+                                    '12:00:00'
+                                )
+                            )
+                        )
+                        ELSE 0
+                    END AS am_work_seconds,
+                    
+                    /* ===================== PM ===================== */
+                    MIN(CASE 
+                        WHEN t.checktype = 'I' 
+                        AND TIME(t.checktime) >= '12:30:00'
+                        AND TIME(t.checktime) < '16:00:00'
+                        THEN TIME(t.checktime) 
+                    END) AS pm_time_in,
+                    
+                    MAX(CASE 
+                        WHEN TIME(t.checktime) >= '12:30:00'
+                        AND (
+                            t.checktype = 'O'
+                            OR (t.checktype = 'I' AND TIME(t.checktime) >= '16:00:00')
+                        )
+                        THEN TIME(t.checktime)
+                    END) AS pm_time_out,
+                    
+                    CASE
+                        WHEN MIN(CASE 
+                            WHEN t.checktype = 'I' 
+                            AND TIME(t.checktime) >= '12:30:00'
+                            AND TIME(t.checktime) < '16:00:00'
+                            THEN TIME(t.checktime) 
+                        END) IS NOT NULL
+                        AND MAX(CASE 
+                            WHEN TIME(t.checktime) >= '12:30:00'
+                            AND (
+                                t.checktype = 'O'
+                                OR (t.checktype = 'I' AND TIME(t.checktime) >= '16:00:00')
+                            )
+                            THEN TIME(t.checktime)
+                        END) IS NOT NULL
+                        THEN TIMESTAMPDIFF(SECOND,
+                            CONCAT(DATE(t.checktime), ' ',
+                                GREATEST(
+                                    MIN(CASE 
+                                        WHEN t.checktype = 'I' 
+                                        AND TIME(t.checktime) >= '12:30:00'
+                                        AND TIME(t.checktime) < '16:00:00'
+                                        THEN TIME(t.checktime) 
+                                    END),
+                                    '13:00:00'
+                                )
+                            ),
+                            CONCAT(DATE(t.checktime), ' ', 
+                                LEAST(
+                                    MAX(CASE 
+                                        WHEN TIME(t.checktime) >= '12:30:00'
+                                        AND (
+                                            t.checktype = 'O'
+                                            OR (t.checktype = 'I' AND TIME(t.checktime) >= '16:00:00')
+                                        )
+                                        THEN TIME(t.checktime)
+                                    END),
+                                    '17:00:00'
+                                )
+                            )
+                        )
+                        ELSE 0
+                    END AS pm_work_seconds,
+                    
+                    COALESCE(
+                        CASE
+                            WHEN MIN(CASE 
+                                WHEN t.checktype = 'I' 
+                                AND TIME(t.checktime) < '12:30:00'
+                                AND TIME(t.checktime) < '11:00:00'
+                                THEN TIME(t.checktime) 
+                            END) IS NOT NULL
+                            AND MAX(CASE 
+                                WHEN TIME(t.checktime) < '12:30:00'
+                                AND (
+                                    t.checktype = 'O'
+                                    OR (t.checktype = 'I' AND TIME(t.checktime) >= '11:00:00')
+                                )
+                                THEN TIME(t.checktime)
+                            END) IS NOT NULL
+                            THEN TIMESTAMPDIFF(SECOND,
+                                CONCAT(DATE(t.checktime), ' ', MIN(CASE 
+                                    WHEN t.checktype = 'I' 
+                                    AND TIME(t.checktime) < '12:30:00'
+                                    AND TIME(t.checktime) < '11:00:00'
+                                    THEN TIME(t.checktime) 
+                                END)),
+                                CONCAT(DATE(t.checktime), ' ', 
+                                    LEAST(
+                                        MAX(CASE 
+                                            WHEN TIME(t.checktime) < '12:30:00'
+                                            AND (
+                                                t.checktype = 'O'
+                                                OR (t.checktype = 'I' AND TIME(t.checktime) >= '11:00:00')
+                                            )
+                                            THEN TIME(t.checktime)
+                                        END),
+                                        '12:00:00'
+                                    )
+                                )
+                            )
+                            ELSE 0
+                        END, 0
+                    ) + COALESCE(
+                        CASE
+                            WHEN MIN(CASE 
+                                WHEN t.checktype = 'I' 
+                                AND TIME(t.checktime) >= '12:30:00'
+                                AND TIME(t.checktime) < '16:00:00'
+                                THEN TIME(t.checktime) 
+                            END) IS NOT NULL
+                            AND MAX(CASE 
+                                WHEN TIME(t.checktime) >= '12:30:00'
+                                AND (
+                                    t.checktype = 'O'
+                                    OR (t.checktype = 'I' AND TIME(t.checktime) >= '16:00:00')
+                                )
+                                THEN TIME(t.checktime)
+                            END) IS NOT NULL
+                            THEN TIMESTAMPDIFF(SECOND,
+                                CONCAT(DATE(t.checktime), ' ',
+                                    GREATEST(
+                                        MIN(CASE 
+                                            WHEN t.checktype = 'I' 
+                                            AND TIME(t.checktime) >= '12:30:00'
+                                            AND TIME(t.checktime) < '16:00:00'
+                                            THEN TIME(t.checktime) 
+                                        END),
+                                        '13:00:00'
+                                    )
+                                ),
+                                CONCAT(DATE(t.checktime), ' ', 
+                                    LEAST(
+                                        MAX(CASE 
+                                            WHEN TIME(t.checktime) >= '12:30:00'
+                                            AND (
+                                                t.checktype = 'O'
+                                                OR (t.checktype = 'I' AND TIME(t.checktime) >= '16:00:00')
+                                            )
+                                            THEN TIME(t.checktime)
+                                        END),
+                                        '17:00:00'
+                                    )
+                                )
+                            )
+                            ELSE 0
+                        END, 0
+                    ) AS total_work_seconds
+
+                FROM attendance t
+                WHERE DATE(t.checktime) = %s
+                GROUP BY t.userid, DATE(t.checktime)
+            ) AS calculated
+            ON eds.userid = calculated.userid AND eds.work_date = calculated.work_date
+            SET 
+                eds.am_time_in = calculated.am_time_in,
+                eds.am_time_out = calculated.am_time_out,
+                eds.am_work_seconds = calculated.am_work_seconds,
+                eds.pm_time_in = calculated.pm_time_in,
+                eds.pm_time_out = calculated.pm_time_out,
+                eds.pm_work_seconds = calculated.pm_work_seconds,
+                eds.total_work_seconds = calculated.total_work_seconds,
+                eds.updated_at = CURRENT_TIMESTAMP
+            """
+            
+            mysql_cursor.execute(sql, (work_date,))
+        
+        mysql_cursor.close()
+        mysql_conn.close()
+        print(f"✓ Updated employee_daily_stats for {len(affected_dates)} date(s)")
+        
+    except Exception as e:
+        print("Error updating employee daily stats:", e)
+        import traceback
+        traceback.print_exc()
 
 # ------------------------
 # DEPARTMENTS SYNC (full history)
@@ -257,6 +508,9 @@ def sync_attendance():
         # Find the CHECKTIME column index in Access results
         checktime_index = access_columns.index("CHECKTIME")
         newest_checktime = None
+        
+        # Track affected dates for employee_daily_stats update
+        affected_dates = set()
 
         # Insert all rows
         for row in rows:
@@ -268,11 +522,20 @@ def sync_attendance():
             current_checktime = row[checktime_index]
             if newest_checktime is None or current_checktime > newest_checktime:
                 newest_checktime = current_checktime
+            
+            # Track affected date for daily stats update
+            if isinstance(current_checktime, datetime):
+                affected_dates.add(current_checktime.date())
 
         mysql_cursor.close()
         mysql_conn.close()
         
         print(f"✓ Synced {len(rows)} new attendance records. Newest: {newest_checktime}")
+        
+        # Update employee daily stats for affected dates
+        if affected_dates:
+            print(f"Updating daily stats for {len(affected_dates)} affected date(s)...")
+            update_employee_daily_stats(sorted(affected_dates))
 
     except Exception as e:
         print("Attendance poller error:", e)

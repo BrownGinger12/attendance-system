@@ -5,6 +5,7 @@ import EmployeePage from "./employeePage";
 import AttendanceRecordPage from "./attendancePage";
 import RealtimeAttendancePage from "./realtimeAttendancePage";
 import DepartmentsPage from "./departmentPage";
+import LeaderboardPage from "./leaderBoardPage";
 
 const MainPage: React.FC = () => {
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(true);
@@ -15,14 +16,7 @@ const MainPage: React.FC = () => {
       case "employee":
         return <EmployeePage />;
       case "employeeStat":
-        return (
-          <div className="text-white">
-            <h1 className="text-2xl font-semibold mb-2">Employee Statistics</h1>
-            <p className="text-slate-400">
-              Employee statistics page coming soon...
-            </p>
-          </div>
-        );
+        return <LeaderboardPage />;
       case "attendance":
         return <AttendanceRecordPage />;
       case "dashboard":
@@ -52,7 +46,7 @@ const MainPage: React.FC = () => {
           activePage={activePage}
           onPageChange={setActivePage}
         />
-        <main className="flex-1 overflow-auto bg-slate-950 p-6">
+        <main className="flex-1 overflow-auto bg-slate-950">
           {renderPage()}
         </main>
       </div>

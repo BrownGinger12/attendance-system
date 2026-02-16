@@ -16,6 +16,35 @@ export interface Department {
   // Add other fields as needed
 }
 
+export interface EmployeeSummary {
+  rank: number;
+  USERID: number;
+  employee_name: string;
+  badge_number: string;
+  department_id: number;
+  department_name: string;
+  total_days_worked: number;
+  avg_am_time_in: string;
+  avg_am_time_out: string;
+  avg_pm_time_in: string;
+  avg_pm_time_out: string;
+  total_am_seconds: number;
+  total_pm_seconds: number;
+  total_work_seconds: number;
+  avg_am_seconds_per_day: number;
+  avg_pm_seconds_per_day: number;
+  avg_work_seconds_per_day: number;
+  total_hours: number;
+  avg_hours_per_day: number;
+}
+
+export interface EmployeeSummaryResponse {
+  statusCode: number;
+  month: string;
+  count: number;
+  data: EmployeeSummary[];
+}
+
 export interface AttendanceRecord {
   id: number;
   checktime: string;
@@ -127,6 +156,18 @@ export const employeeService = {
     const response = await apiClient.get<EmployeesResponse>("/employees", {
       params: { page, limit },
     });
+    return response.data;
+  },
+
+  getEmployeeSummary: async (
+    month: string,
+  ): Promise<EmployeeSummaryResponse> => {
+    const response = await apiClient.get<EmployeeSummaryResponse>(
+      "/employee-stats/summary",
+      {
+        params: { month },
+      },
+    );
     return response.data;
   },
 

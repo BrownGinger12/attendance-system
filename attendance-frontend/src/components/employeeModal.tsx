@@ -612,14 +612,15 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({
                         Complete Attendance Record
                       </h3>
                     </div>
-                    <div className="max-h-96 overflow-y-auto">
+                    {/* Updated max height to show exactly 6 rows */}
+                    <div className="max-h-[250px] overflow-y-auto">
                       {loadingAttendance ? (
                         <div className="flex items-center justify-center py-12">
                           <Clock className="w-8 h-8 text-slate-400 animate-spin" />
                         </div>
                       ) : attendanceData.length > 0 ? (
                         <table className="w-full text-sm">
-                          <thead className="bg-slate-700 sticky top-0">
+                          <thead className="bg-slate-700 sticky top-0 z-10">
                             <tr>
                               <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">
                                 Date
@@ -706,6 +707,11 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({
                             {attendanceData.length}
                           </span>
                         </p>
+                        {attendanceData.length > 6 && (
+                          <p className="text-xs text-slate-400">
+                            Scroll to see all records
+                          </p>
+                        )}
                       </div>
                     )}
                   </div>
