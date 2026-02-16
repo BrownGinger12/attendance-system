@@ -1,6 +1,7 @@
+# model/employee_daily_stats.py
 from pydantic import BaseModel
 from typing import Optional
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 from gateway.mysql_gateway import fetch_query
 
 
@@ -17,6 +18,39 @@ class EmployeeDailyStats(BaseModel):
     total_work_seconds: Optional[int] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+
+    # --------------------------
+    # Helper: Convert timedelta to time string
+    # --------------------------
+    @staticmethod
+    def _convert_timedelta_to_time_str(td):
+        if td is None:
+            return None
+        if isinstance(td, timedelta):
+            total_seconds = int(td.total_seconds())
+            hours = total_seconds // 3600
+            minutes = (total_seconds % 3600) // 60
+            seconds = total_seconds % 60
+            return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+        return str(td)
+
+    # --------------------------
+    # Helper: Process rows to convert timedelta to strings
+    # --------------------------
+    @staticmethod
+    def _process_rows(rows):
+        if not rows:
+            return rows
+        
+        processed = []
+        for row in rows:
+            row_dict = dict(row)
+            # Convert TIME fields from timedelta to string
+            for field in ['am_time_in', 'am_time_out', 'pm_time_in', 'pm_time_out']:
+                if field in row_dict and row_dict[field] is not None:
+                    row_dict[field] = EmployeeDailyStats._convert_timedelta_to_time_str(row_dict[field])
+            processed.append(row_dict)
+        return processed
 
     # --------------------------
     # Get daily stats for a specific month (YYYY-MM)
@@ -44,7 +78,9 @@ class EmployeeDailyStats(BaseModel):
             sql += " ORDER BY work_date DESC, userid ASC"
             
             rows = fetch_query(sql, params)
-            return {"statusCode": 200, "count": len(rows), "data": rows} if rows else {
+            processed_rows = EmployeeDailyStats._process_rows(rows)
+            
+            return {"statusCode": 200, "count": len(processed_rows), "data": processed_rows} if processed_rows else {
                 "statusCode": 404,
                 "message": "No daily stats found for this month"
             }
@@ -70,8 +106,9 @@ class EmployeeDailyStats(BaseModel):
             ORDER BY work_date DESC
             """
             rows = fetch_query(sql, [user_id, start, end])
+            processed_rows = EmployeeDailyStats._process_rows(rows)
             
-            return {"statusCode": 200, "count": len(rows), "data": rows} if rows else {
+            return {"statusCode": 200, "count": len(processed_rows), "data": processed_rows} if processed_rows else {
                 "statusCode": 404,
                 "message": f"No daily stats found for USERID {user_id} in {month}"
             }
