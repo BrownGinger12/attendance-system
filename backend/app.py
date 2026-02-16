@@ -30,6 +30,11 @@ from handler.attendance_record_handler import (
     get_attendance_employee,
     edit_attendance
 )
+from handler.employee_stats_handler import (
+    get_stats_employee,
+    get_stats_month
+)
+
 from handler.department_handler import get_departments, get_department_by_id
 from handler.attendance_watcher_handler import AttendanceWatcher
 
@@ -154,6 +159,17 @@ def attendance_day():
 @app.route("/attendance/<int:record_id>", methods=["PUT"])
 def attendance_edit(record_id):
     return edit_attendance(record_id)
+
+# ------------------------------
+# Employee stats endpoints
+# ------------------------------
+@app.route("/employee-stats/month", methods=["GET"])
+def employee_stats_month():
+    return get_stats_month()
+
+@app.route("/employee-stats/employee", methods=["GET"])
+def employee_stats_employee():
+    return get_stats_employee()
 
 # ------------------------------
 # DTR Export endpoint
