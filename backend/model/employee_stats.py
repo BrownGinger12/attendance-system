@@ -120,6 +120,7 @@ class EmployeeDailyStats(BaseModel):
     # Get all employee stats grouped by employee for a SPECIFIC MONTH
     # Includes employee name and department
     # --------------------------
+    # model/employee_daily_stats.py
     @staticmethod
     def get_all_employees_summary(month: str):
         try:
@@ -137,26 +138,59 @@ class EmployeeDailyStats(BaseModel):
                 d.deptid as department_id,
                 d.deptname as department_name,
                 COUNT(eds.id) as total_days_worked,
+                
+                -- Average times
+                SEC_TO_TIME(AVG(TIME_TO_SEC(eds.am_time_in))) as avg_am_time_in,
+                SEC_TO_TIME(AVG(TIME_TO_SEC(eds.am_time_out))) as avg_am_time_out,
+                SEC_TO_TIME(AVG(TIME_TO_SEC(eds.pm_time_in))) as avg_pm_time_in,
+                SEC_TO_TIME(AVG(TIME_TO_SEC(eds.pm_time_out))) as avg_pm_time_out,
+                
+                -- Total seconds
                 SUM(eds.am_work_seconds) as total_am_seconds,
                 SUM(eds.pm_work_seconds) as total_pm_seconds,
                 SUM(eds.total_work_seconds) as total_work_seconds,
-                ROUND(SUM(eds.total_work_seconds) / 3600, 2) as total_hours
+                
+                -- Average seconds per day
+                ROUND(AVG(eds.am_work_seconds), 0) as avg_am_seconds_per_day,
+                ROUND(AVG(eds.pm_work_seconds), 0) as avg_pm_seconds_per_day,
+                ROUND(AVG(eds.total_work_seconds), 0) as avg_work_seconds_per_day,
+                
+                -- Hours
+                ROUND(SUM(eds.total_work_seconds) / 3600, 2) as total_hours,
+                ROUND(AVG(eds.total_work_seconds) / 3600, 2) as avg_hours_per_day
             FROM employee_daily_stats eds
             INNER JOIN employees e ON eds.userid = e.USERID
             LEFT JOIN departments d ON e.DEFAULTDEPTID = d.deptid
             WHERE eds.work_date >= %s AND eds.work_date < %s
             GROUP BY e.USERID, e.Name, e.Badgenumber, d.deptid, d.deptname
-            ORDER BY e.Name ASC
+            ORDER BY avg_hours_per_day DESC, e.Name ASC
             """
             
             rows = fetch_query(sql, [start, end])
             
+            # Process rows to convert timedelta to strings and add ranking
+            processed_rows = []
+            rank = 1
+            for row in rows:
+                row_dict = dict(row)
+                
+                # Convert average time fields from timedelta to string
+                for field in ['avg_am_time_in', 'avg_am_time_out', 'avg_pm_time_in', 'avg_pm_time_out']:
+                    if field in row_dict and row_dict[field] is not None:
+                        row_dict[field] = EmployeeDailyStats._convert_timedelta_to_time_str(row_dict[field])
+                
+                # Add rank
+                row_dict['rank'] = rank
+                rank += 1
+                
+                processed_rows.append(row_dict)
+            
             return {
                 "statusCode": 200,
                 "month": month,
-                "count": len(rows),
-                "data": rows
-            } if rows else {
+                "count": len(processed_rows),
+                "data": processed_rows
+            } if processed_rows else {
                 "statusCode": 404,
                 "message": f"No employee stats found for {month}"
             }
