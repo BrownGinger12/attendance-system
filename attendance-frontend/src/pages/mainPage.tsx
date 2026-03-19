@@ -6,10 +6,11 @@ import AttendanceRecordPage from "./attendancePage";
 import RealtimeAttendancePage from "./realtimeAttendancePage";
 import DepartmentsPage from "./departmentPage";
 import LeaderboardPage from "./leaderBoardPage";
+import DashboardPage from "./dashBoardPage";
 
 const MainPage: React.FC = () => {
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(true);
-  const [activePage, setActivePage] = useState<string>("employee");
+  const [activePage, setActivePage] = useState<string>("dashboard");
 
   const renderPage = () => {
     switch (activePage) {
@@ -20,19 +21,13 @@ const MainPage: React.FC = () => {
       case "attendance":
         return <AttendanceRecordPage />;
       case "dashboard":
-        return (
-          <div className="text-white">
-            <h1 className="text-2xl font-semibold mb-2">Dashboard</h1>
-            <p className="text-slate-400">Dashboard page coming soon...</p>
-          </div>
-        );
-
+        return <DashboardPage />;
       case "realtimeAttendance":
         return <RealtimeAttendancePage />;
       case "departments":
         return <DepartmentsPage />;
       default:
-        return <EmployeePage />;
+        return <DashboardPage />;
     }
   };
 

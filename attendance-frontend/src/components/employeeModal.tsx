@@ -65,6 +65,7 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({
   // Edit form state
   const [editName, setEditName] = useState("");
   const [editDeptId, setEditDeptId] = useState(0);
+  const [editBadgeNumber, setEditBadgeNumber] = useState("");
   const [editPhoto, setEditPhoto] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
 
@@ -90,6 +91,7 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({
       setEmployee(response.data);
       setEditName(response.data.name);
       setEditDeptId(response.data.defaultdeptid);
+      setEditBadgeNumber(response.data.badgenumber);
 
       // Handle photo - base64 string
       if (response.data.PHOTO) {
@@ -157,26 +159,19 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({
         grouped[date] = { date };
       }
 
-      // AM period: before 12:30 PM (up to 12:29 PM)
-      // PM period: 12:30 PM and after
       const isAM = hour < 12 || (hour === 12 && minute < 30);
 
-      // Determine if this check-in should be reclassified as check-out
       let effectiveCheckType = record.checktype;
 
       if (record.checktype === "I") {
-        // Reclassify AM check-ins at 11:00 AM or later as check-outs
         if (isAM && hour >= 11) {
           effectiveCheckType = "O";
-        }
-        // Reclassify PM check-ins at 4:00 PM or later as check-outs
-        else if (!isAM && hour >= 16) {
+        } else if (!isAM && hour >= 16) {
           effectiveCheckType = "O";
         }
       }
 
       if (effectiveCheckType === "I") {
-        // Check-in: keep earliest time
         if (isAM) {
           if (!grouped[date].amCheckIn || time < grouped[date].amCheckIn!) {
             grouped[date].amCheckIn = time;
@@ -187,16 +182,13 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({
           }
         }
       } else if (effectiveCheckType === "O") {
-        // Check-out: keep latest time that is after check-in
         if (isAM) {
-          // Only consider AM out if it's after AM in (or if no AM in yet)
           if (!grouped[date].amCheckIn || time > grouped[date].amCheckIn) {
             if (!grouped[date].amCheckOut || time > grouped[date].amCheckOut!) {
               grouped[date].amCheckOut = time;
             }
           }
         } else {
-          // Only consider PM out if it's after PM in (or if no PM in yet)
           if (!grouped[date].pmCheckIn || time > grouped[date].pmCheckIn) {
             if (!grouped[date].pmCheckOut || time > grouped[date].pmCheckOut!) {
               grouped[date].pmCheckOut = time;
@@ -256,6 +248,10 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({
         payload.defaultdeptid = editDeptId;
       }
 
+      if (editBadgeNumber !== employee?.badgenumber) {
+        payload.badgenumber = editBadgeNumber;
+      }
+
       if (editPhoto) {
         const reader = new FileReader();
         const photoBytes = await new Promise<string>((resolve) => {
@@ -286,6 +282,7 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({
     setIsEditing(false);
     setEditName(employee?.name || "");
     setEditDeptId(employee?.defaultdeptid || 0);
+    setEditBadgeNumber(employee?.badgenumber || "");
     setEditPhoto(null);
 
     if (employee?.PHOTO) {
@@ -321,7 +318,6 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({
         data: attendanceResponse.data,
       };
 
-      // Call the export DTR API and get blob response
       const response = await fetch(
         `${import.meta.env.VITE_API_URL}/api/fill-dtr-json`,
         {
@@ -337,10 +333,7 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({
         throw new Error("Failed to export DTR");
       }
 
-      // Get the blob (DOCX file)
       const blob = await response.blob();
-
-      // Create download link
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -464,7 +457,17 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({
                       <label className="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-2">
                         Employee ID
                       </label>
-                      <p className="text-slate-300">{employee.badgenumber}</p>
+                      {isEditing ? (
+                        <input
+                          type="text"
+                          value={editBadgeNumber}
+                          onChange={(e) => setEditBadgeNumber(e.target.value)}
+                          className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-slate-600 transition-colors"
+                          placeholder="Enter employee ID"
+                        />
+                      ) : (
+                        <p className="text-slate-300">{employee.badgenumber}</p>
+                      )}
                     </div>
 
                     <div>
@@ -612,7 +615,6 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({
                         Complete Attendance Record
                       </h3>
                     </div>
-                    {/* Updated max height to show exactly 6 rows */}
                     <div className="max-h-[250px] overflow-y-auto">
                       {loadingAttendance ? (
                         <div className="flex items-center justify-center py-12">
