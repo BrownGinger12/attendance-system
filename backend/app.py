@@ -11,6 +11,11 @@ import threading
 from datetime import datetime, date, time as dtime
 
 from handler.dtr_generator_handler import fill_dtr_document, fill_dtr_document_from_data
+from utils.jwt_required import employee_jwt_required
+from handler.profile_handler import (
+    get_profile, update_profile_name, update_profile_avatar,
+    change_profile_password, serve_avatar,
+)
 from handler.employee_handler import (
     delete_employee,
     export_employees_to_excel,
@@ -22,7 +27,10 @@ from handler.employee_handler import (
     update_employee,
     get_employee_count,
     get_employee_by_badge,
-    get_employees_by_department
+    get_employees_by_department,
+    login_employee,
+    checkin_employee,
+    checkout_employee,
 )
 from handler.attendance_record_handler import (
     get_attendance_month,
@@ -37,6 +45,17 @@ from handler.employee_stats_handler import (
     get_employee_detailed_stats
 )
 
+from handler.accomplishment_handler import (
+    create_accomplishment,
+    get_all_accomplishments,
+    get_user_accomplishments,
+    get_accomplishment_by_id,
+    update_accomplishment,
+    delete_accomplishment,
+    add_files_to_accomplishment,
+    delete_file_from_accomplishment,
+    serve_accomplishment_upload,
+)
 from handler.department_handler import get_departments, get_department_by_id
 from handler.attendance_watcher_handler import AttendanceWatcher
 
@@ -45,6 +64,22 @@ from handler.attendance_watcher_handler import AttendanceWatcher
 # ------------------------------
 app = Flask(__name__)
 CORS(app)
+
+@app.after_request
+def apply_cors(response):
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Headers"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+    return response
+
+@app.before_request
+def handle_preflight():
+    if request.method == "OPTIONS":
+        response = app.make_default_options_response()
+        response.headers["Access-Control-Allow-Origin"] = "*"
+        response.headers["Access-Control-Allow-Headers"] = "*"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+        return response
 
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 ATTENDANCE_NS = '/attendance'
@@ -139,6 +174,21 @@ def export_excel_route():
 @app.route("/employee/badge", methods=["GET"])
 def employee_by_badge_route():
     return get_employee_by_badge()
+
+@app.route("/employee/login", methods=["POST"])
+def employee_login_route():
+    return login_employee()
+
+@app.route("/employee/checkin", methods=["POST"])
+@employee_jwt_required
+def employee_checkin_route(current_employee):
+    return checkin_employee(current_employee)
+
+@app.route("/employee/checkout", methods=["POST"])
+@employee_jwt_required
+def employee_checkout_route(current_employee):
+    return checkout_employee(current_employee)
+
 @app.route("/employees/department/<int:dept_id>", methods=["GET"])
 def employees_by_department_route(dept_id):
     return get_employees_by_department(dept_id)
@@ -161,6 +211,77 @@ def attendance_day():
 @app.route("/attendance/<int:record_id>", methods=["PUT"])
 def attendance_edit(record_id):
     return edit_attendance(record_id)
+
+# ------------------------------
+# Accomplishment endpoints
+# ------------------------------
+@app.route("/accomplishments", methods=["POST"])
+@employee_jwt_required
+def create_accomplishment_route(current_employee):
+    return create_accomplishment(current_employee)
+
+@app.route("/accomplishments", methods=["GET"])
+def get_all_accomplishments_route():
+    return get_all_accomplishments()
+
+@app.route("/accomplishments/user/<int:user_id>", methods=["GET"])
+def get_user_accomplishments_route(user_id):
+    return get_user_accomplishments(user_id)
+
+@app.route("/accomplishments/<int:post_id>", methods=["GET"])
+def get_accomplishment_route(post_id):
+    return get_accomplishment_by_id(post_id)
+
+@app.route("/accomplishments/<int:post_id>", methods=["PUT"])
+@employee_jwt_required
+def update_accomplishment_route(current_employee, post_id):
+    return update_accomplishment(post_id, current_employee)
+
+@app.route("/accomplishments/<int:post_id>", methods=["DELETE"])
+@employee_jwt_required
+def delete_accomplishment_route(current_employee, post_id):
+    return delete_accomplishment(post_id, current_employee)
+
+@app.route("/accomplishments/<int:post_id>/files", methods=["POST"])
+@employee_jwt_required
+def add_files_route(current_employee, post_id):
+    return add_files_to_accomplishment(post_id, current_employee)
+
+@app.route("/accomplishments/<int:post_id>/files/<int:file_id>", methods=["DELETE"])
+@employee_jwt_required
+def delete_file_route(current_employee, post_id, file_id):
+    return delete_file_from_accomplishment(post_id, file_id, current_employee)
+
+@app.route("/uploads/accomplishments/<path:filename>", methods=["GET"])
+def serve_upload_route(filename):
+    return serve_accomplishment_upload(filename)
+
+# ------------------------------
+# Profile endpoints
+# ------------------------------
+@app.route("/employee/profile", methods=["GET"])
+@employee_jwt_required
+def get_profile_route(current_employee):
+    return get_profile(current_employee)
+
+@app.route("/employee/profile/name", methods=["PUT"])
+@employee_jwt_required
+def update_profile_name_route(current_employee):
+    return update_profile_name(current_employee)
+
+@app.route("/employee/profile/avatar", methods=["PUT"])
+@employee_jwt_required
+def update_profile_avatar_route(current_employee):
+    return update_profile_avatar(current_employee)
+
+@app.route("/employee/profile/password", methods=["PUT"])
+@employee_jwt_required
+def change_profile_password_route(current_employee):
+    return change_profile_password(current_employee)
+
+@app.route("/uploads/avatars/<path:filename>", methods=["GET"])
+def serve_avatar_route(filename):
+    return serve_avatar(filename)
 
 # ------------------------------
 # Employee stats endpoints

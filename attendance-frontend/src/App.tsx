@@ -9,6 +9,9 @@ import ProtectedRoute from "./components/protectedRoutes";
 import MainPage from "./pages/mainPage";
 import DTRPage from "./pages/dtrPage";
 import LoginPage from "./pages/loginPage";
+import EmployeeLoginPage from "./pages/employeeLoginPage";
+import EmployeeDashboardPage from "./pages/employeeDashboardPage";
+import EmployeeSettingsPage from "./pages/employeeSettingsPage";
 import NotFoundPage from "./pages/notFoundPage";
 
 export default function App() {
@@ -18,6 +21,9 @@ export default function App() {
         <div className="w-full h-screen">
           <Routes>
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/employee-login" element={<EmployeeLoginPage />} />
+            <Route path="/employee" element={<EmployeeDashboardPage />} />
+            <Route path="/employee/settings" element={<EmployeeSettingsPage />} />
             <Route path="/dtr" element={<DTRPage />} />
 
             <Route

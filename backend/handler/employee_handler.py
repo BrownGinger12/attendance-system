@@ -1,6 +1,7 @@
-from flask import request, jsonify,send_file
+from flask import request, jsonify, send_file
 from model.employee import Employee
 from pydantic import ValidationError
+
 
 def get_employees_paginated():
     try:
@@ -163,5 +164,37 @@ def get_employees_by_department(dept_id: int):
 
     except ValidationError as e:
         return jsonify({"message": str(e)}), 400
+    except Exception as e:
+        return jsonify({"message": str(e)}), 500
+
+def login_employee():
+    try:
+        data = request.get_json(silent=True)
+        if not data:
+            return jsonify({"message": "No data provided"}), 400
+
+        badge_number = data.get("badge_number", "").strip()
+        password = data.get("password", "")
+
+        if not badge_number or not password:
+            return jsonify({"message": "badge_number and password are required"}), 400
+
+        result = Employee.login(badge_number, password)
+        return jsonify(result), result["statusCode"]
+
+    except Exception as e:
+        return jsonify({"message": str(e)}), 500
+
+def checkin_employee(current_employee):
+    try:
+        result = Employee.checkin(current_employee["userid"])
+        return jsonify(result), result["statusCode"]
+    except Exception as e:
+        return jsonify({"message": str(e)}), 500
+
+def checkout_employee(current_employee):
+    try:
+        result = Employee.checkout(current_employee["userid"])
+        return jsonify(result), result["statusCode"]
     except Exception as e:
         return jsonify({"message": str(e)}), 500

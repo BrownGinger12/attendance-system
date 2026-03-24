@@ -1,7 +1,7 @@
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
-from gateway.mysql_gateway import fetch_query
+from gateway.mysql_gateway import fetch_query, query
 from email.utils import parsedate_to_datetime
 
 
@@ -193,3 +193,22 @@ class AttendanceRecord(BaseModel):
                 "statusCode": 500,
                 "message": str(e)
             }
+
+    # --------------------------
+    # Create attendance record
+    # --------------------------
+    @staticmethod
+    def create(userid: int, checktime: datetime, checktype: Optional[str] = None,
+               verifycode: Optional[int] = None, sensorid: Optional[str] = None,
+               sn: Optional[str] = None):
+        try:
+            sql = """
+                INSERT INTO attendance (userid, checktime, checktype, verifycode, sensorid, sn)
+                VALUES (%s, %s, %s, %s, %s, %s)
+            """
+            result = query(sql, [userid, checktime, checktype, verifycode, sensorid, sn])
+            if result["statusCode"] == 200:
+                result["message"] = "Attendance record created successfully"
+            return result
+        except Exception as e:
+            return {"statusCode": 500, "message": str(e)}

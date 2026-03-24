@@ -2,9 +2,33 @@ from pydantic import BaseModel
 from typing import Optional
 import base64
 import math
+import re
+import os
 from io import BytesIO
+from datetime import datetime, timezone, timedelta
+import bcrypt
+import jwt
 import pandas as pd
 from gateway.mysql_gateway import fetch_query, query  # updated for SQL
+
+JWT_SECRET = os.getenv("JWT_SECRET", "dev-secret-key")
+JWT_ALGORITHM = "HS256"
+JWT_EXPIRY_HOURS = 8
+
+
+def _validate_password_strength(password: str) -> str | None:
+    """Returns an error message if the password is weak, else None."""
+    if len(password) < 8 or len(password) > 16:
+        return "Password must be between 8 and 16 characters"
+    if not re.search(r"[A-Z]", password):
+        return "Password must contain at least one uppercase letter"
+    if not re.search(r"[a-z]", password):
+        return "Password must contain at least one lowercase letter"
+    if not re.search(r"\d", password):
+        return "Password must contain at least one number"
+    if not re.search(r"[!@#$%^&*()_+\-=\[\]{};':\"\\|,.<>\/?]", password):
+        return "Password must contain at least one symbol"
+    return None
 
 class Employee(BaseModel):
     USERID: int
@@ -59,6 +83,118 @@ class Employee(BaseModel):
     TimeZone3: Optional[int] = None
     Pin1: Optional[str] = None
     schedule_type: Optional[str] = None  # new attribute
+
+    # -------------------------
+    # TOTAL EMPLOYEES
+    # -------------------------
+    # -------------------------
+    # AUTH
+    # -------------------------
+    @staticmethod
+    def login(badge_number: str, password: str):
+        try:
+            sql = """
+                SELECT e.USERID, e.Badgenumber, e.Name, e.PASSWORD,
+                       d.deptname
+                FROM employees e
+                LEFT JOIN departments d ON d.deptid = e.DEFAULTDEPTID
+                WHERE e.Badgenumber = %s
+            """
+            rows = fetch_query(sql, [badge_number])
+
+            if not rows:
+                return {"statusCode": 401, "message": "Invalid Employee ID or password"}
+
+            row = rows[0]
+            stored_hash = row.get("PASSWORD")
+
+            if not stored_hash:
+                return {"statusCode": 401, "message": "No password set for this account"}
+
+            if not bcrypt.checkpw(password.encode(), stored_hash.encode()):
+                return {"statusCode": 401, "message": "Invalid Employee ID or password"}
+
+            department = row.get("deptname") or "Unknown"
+
+            payload = {
+                "sub": str(row["USERID"]),
+                "badge": row["Badgenumber"],
+                "name": row["Name"],
+                "department": department,
+                "exp": datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRY_HOURS),
+            }
+            token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+            return {
+                "statusCode": 200,
+                "token": token,
+                "employee": {
+                    "id": row["USERID"],
+                    "badge": row["Badgenumber"],
+                    "name": row["Name"],
+                    "department": department,
+                },
+            }
+        except Exception as e:
+            return {"statusCode": 500, "message": str(e)}
+
+    @staticmethod
+    def change_password(badge_number: str, old_password: str, new_password: str):
+        try:
+            # Validate new password strength
+            error = _validate_password_strength(new_password)
+            if error:
+                return {"statusCode": 400, "message": error}
+
+            sql = "SELECT USERID, PASSWORD FROM employees WHERE Badgenumber = %s"
+            rows = fetch_query(sql, [badge_number])
+
+            if not rows:
+                return {"statusCode": 404, "message": "Employee not found"}
+
+            row = rows[0]
+            stored_hash = row.get("PASSWORD")
+
+            if not stored_hash or not bcrypt.checkpw(old_password.encode(), stored_hash.encode()):
+                return {"statusCode": 401, "message": "Current password is incorrect"}
+
+            new_hash = bcrypt.hashpw(new_password.encode(), bcrypt.gensalt()).decode()
+            result = query(
+                "UPDATE employees SET PASSWORD = %s WHERE USERID = %s",
+                [new_hash, row["USERID"]],
+            )
+            if result["statusCode"] == 200:
+                result["message"] = "Password changed successfully"
+            return result
+        except Exception as e:
+            return {"statusCode": 500, "message": str(e)}
+
+    # -------------------------
+    # CHECKIN / CHECKOUT
+    # -------------------------
+    @staticmethod
+    def checkin(user_id: int):
+        try:
+            from model.attendance_records import AttendanceRecord
+            return AttendanceRecord.create(
+                userid=user_id,
+                checktime=datetime.now(),
+                checktype="I",
+            )
+        except Exception as e:
+            return {"statusCode": 500, "message": str(e)}
+
+    @staticmethod
+    def checkout(user_id: int):
+        try:
+            from model.attendance_records import AttendanceRecord
+            return AttendanceRecord.create(
+                userid=user_id,
+                checktime=datetime.now(),
+                checktype="O",
+            )
+        except Exception as e:
+            return {"statusCode": 500, "message": str(e)}
 
     # -------------------------
     # TOTAL EMPLOYEES
@@ -153,6 +289,18 @@ class Employee(BaseModel):
         except Exception as e:
             return {"statusCode": 500, "message": str(e)}
 
+    _UPDATABLE_COLUMNS = {
+        "Name", "DEFAULTDEPTID", "SSN", "Gender", "TITLE", "PAGER", "BIRTHDAY",
+        "HIREDDAY", "street", "CITY", "STATE", "ZIP", "OPHONE", "FPHONE",
+        "VERIFICATIONMETHOD", "SECURITYFLAGS", "ATT", "INLATE", "OUTEARLY",
+        "OVERTIME", "SEP", "HOLIDAY", "MINZU", "PASSWORD", "LUNCHDURATION",
+        "PHOTO", "mverifypass", "Notes", "privilege", "InheritDeptSch",
+        "InheritDeptSchClass", "AutoSchPlan", "MinAutoSchInterval", "RegisterOT",
+        "InheritDeptRule", "EMPRIVILEGE", "CardNo", "FaceGroup", "AccGroup",
+        "UseAccGroupTZ", "VerifyCode", "Expires", "ValidCount", "ValidTimeBegin",
+        "ValidTimeEnd", "TimeZone1", "TimeZone2", "TimeZone3", "Pin1", "schedule_type",
+    }
+
     @staticmethod
     def update(user_id: int, data: dict):
         try:
@@ -163,14 +311,13 @@ class Employee(BaseModel):
             if not data:
                 return {"statusCode": 400, "message": "No update data provided"}
 
-            blocked = {"USERID", "Badgenumber"}
             fields = []
             values = []
 
             for k, v in data.items():
-                if k in blocked:
-                    continue
-                fields.append(f"{k} = %s")
+                if k not in Employee._UPDATABLE_COLUMNS:
+                    return {"statusCode": 400, "message": f"Invalid or non-updatable field: {k}"}
+                fields.append(f"`{k}` = %s")
                 values.append(v)
 
             values.append(user_id)
@@ -190,6 +337,29 @@ class Employee(BaseModel):
             return query(sql, [user_id])
         except Exception as e:
             return {"statusCode": 500, "message": str(e)}
+
+    @staticmethod
+    def get_avatar(user_id: int):
+        rows = fetch_query("SELECT avatar_url FROM employee_avatars WHERE user_id = %s", [user_id])
+        return rows[0]["avatar_url"] if rows else None
+
+    @staticmethod
+    def upsert_avatar(user_id: int, avatar_url: str):
+        return query(
+            """INSERT INTO employee_avatars (user_id, avatar_url) VALUES (%s, %s)
+               ON DUPLICATE KEY UPDATE avatar_url = %s, updated_at = NOW()""",
+            [user_id, avatar_url, avatar_url],
+        )
+
+    @staticmethod
+    def update_name(user_id: int, name: str):
+        name = name.strip()
+        if not name:
+            return {"statusCode": 400, "message": "Name cannot be empty"}
+        result = query("UPDATE employees SET Name = %s WHERE USERID = %s", [name, user_id])
+        if result["statusCode"] == 200:
+            result["message"] = "Name updated successfully"
+        return result
 
     @staticmethod
     def search(term: str, page: int = 1, limit: int = 10):
