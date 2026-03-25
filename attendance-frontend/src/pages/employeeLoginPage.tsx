@@ -13,6 +13,13 @@ const EmployeeLoginPage: React.FC = () => {
 
   const navigate = useNavigate();
 
+  // Redirect if already logged in
+  React.useEffect(() => {
+    if (localStorage.getItem("employeeToken")) {
+      navigate("/employee", { replace: true });
+    }
+  }, [navigate]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);

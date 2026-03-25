@@ -85,8 +85,10 @@ const PostModal: React.FC<Props> = ({
         <div className="p-4 flex-1 overflow-y-auto max-h-[60vh]">
           {/* Author row */}
           <div className="flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
-              {employee?.name.charAt(0)}
+            <div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold text-sm flex-shrink-0 overflow-hidden">
+              {employee?.avatar_url
+                ? <img src={`${API_URL}${employee.avatar_url}`} alt={employee.name} className="w-full h-full object-cover" />
+                : employee?.name.charAt(0)}
             </div>
             <span className="text-sm font-semibold text-slate-800 dark:text-white">
               {employee?.name}

@@ -22,8 +22,10 @@ const PostCard: React.FC<Props> = ({ post, employee, openMenuPostId, onMenuToggl
       {/* Header */}
       <div className="flex items-center justify-between px-4 pt-4 pb-2">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
-            {employee.name.charAt(0)}
+          <div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold text-sm flex-shrink-0 overflow-hidden">
+            {employee.avatar_url
+              ? <img src={`${API_URL}${employee.avatar_url}`} alt={employee.name} className="w-full h-full object-cover" />
+              : employee.name.charAt(0)}
           </div>
           <div>
             <p className="text-sm font-semibold text-slate-800 dark:text-white">{employee.name}</p>

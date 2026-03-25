@@ -2,6 +2,8 @@ import React from "react";
 import { Image, Paperclip } from "lucide-react";
 import { EmployeeInfo } from "../../types/dashboard";
 
+const API_URL = import.meta.env.VITE_API_URL;
+
 interface Props {
   employee: EmployeeInfo | null;
   onOpen: () => void;
@@ -11,8 +13,10 @@ const CreatePostBox: React.FC<Props> = ({ employee, onOpen }) => {
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4">
       <div className="flex items-center gap-3 mb-3">
-        <div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
-          {employee?.name.charAt(0)}
+        <div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold text-sm flex-shrink-0 overflow-hidden">
+          {employee?.avatar_url
+            ? <img src={`${API_URL}${employee.avatar_url}`} alt={employee.name} className="w-full h-full object-cover" />
+            : employee?.name.charAt(0)}
         </div>
         <button
           onClick={onOpen}
