@@ -5,6 +5,7 @@ export interface Employee {
   name: string;
   badgenumber: string;
   defaultdeptid: number;
+  role: string | null;
   FingerprintCount?: number;
   // Add other fields as needed
 }
@@ -62,6 +63,7 @@ export interface EmployeeDetail {
   userid: number;
   name: string;
   badgenumber: string;
+  role: string | null;
   defaultdeptid: number;
   PHOTO: string | null;
   ATT: number;

@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, ClassVar
 import base64
 import math
 import re
@@ -82,6 +82,7 @@ class Employee(BaseModel):
     TimeZone2: Optional[int] = None
     TimeZone3: Optional[int] = None
     Pin1: Optional[str] = None
+    role: Optional[str] = None  # new attribute
     schedule_type: Optional[str] = None  # new attribute
 
     # -------------------------
@@ -296,12 +297,12 @@ class Employee(BaseModel):
         except Exception as e:
             return {"statusCode": 500, "message": str(e)}
 
-    _UPDATABLE_COLUMNS = {
-        "Name", "DEFAULTDEPTID", "SSN", "Gender", "TITLE", "PAGER", "BIRTHDAY",
+    _UPDATABLE_COLUMNS: ClassVar[set] = {
+        "Name", "DEFAULTDEPTID", "badgenumber", "SSN", "Gender", "TITLE", "PAGER", "BIRTHDAY",
         "HIREDDAY", "street", "CITY", "STATE", "ZIP", "OPHONE", "FPHONE",
         "VERIFICATIONMETHOD", "SECURITYFLAGS", "ATT", "INLATE", "OUTEARLY",
         "OVERTIME", "SEP", "HOLIDAY", "MINZU", "PASSWORD", "LUNCHDURATION",
-        "PHOTO", "mverifypass", "Notes", "privilege", "InheritDeptSch",
+        "PHOTO", "mverifypass", "Notes", "privilege", "role", "InheritDeptSch",
         "InheritDeptSchClass", "AutoSchPlan", "MinAutoSchInterval", "RegisterOT",
         "InheritDeptRule", "EMPRIVILEGE", "CardNo", "FaceGroup", "AccGroup",
         "UseAccGroupTZ", "VerifyCode", "Expires", "ValidCount", "ValidTimeBegin",

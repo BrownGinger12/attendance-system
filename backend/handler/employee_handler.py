@@ -61,6 +61,7 @@ def update_employee(user_id):
         return jsonify(response), response["statusCode"]
 
     except Exception as e:
+        print(f"Update employee error: {e}")
         return jsonify({"message": str(e)}), 500
 
 def get_employee_count():

@@ -1,5 +1,6 @@
 import React from "react";
 import { X, Loader2 } from "lucide-react";
+import { createPortal, useScrollLock } from "../../hooks/useModalPortal";
 
 interface Props {
   show: boolean;
@@ -10,9 +11,10 @@ interface Props {
 }
 
 const DeleteConfirmModal: React.FC<Props> = ({ show, visible, deleting, onCancel, onConfirm }) => {
+  useScrollLock(show);
   if (!show) return null;
 
-  return (
+  return createPortal(
     <div
       className={`fixed inset-0 z-50 flex items-center justify-center p-4 transition-all duration-200 ${
         visible ? "bg-black/40" : "bg-black/0"
@@ -54,7 +56,8 @@ const DeleteConfirmModal: React.FC<Props> = ({ show, visible, deleting, onCancel
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 

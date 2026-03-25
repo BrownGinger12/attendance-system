@@ -1,5 +1,6 @@
 import React from "react";
 import { X, Image, Paperclip, FileText, Loader2 } from "lucide-react";
+import { createPortal, useScrollLock } from "../../hooks/useModalPortal";
 import { AccomplishmentPost, EmployeeInfo } from "../../types/dashboard";
 
 const API_URL = import.meta.env.VITE_API_URL;
@@ -44,6 +45,7 @@ const PostModal: React.FC<Props> = ({
   onRemoveFile,
   onDeleteFile,
 }) => {
+  useScrollLock(show);
   if (!show) return null;
 
   const existingImages =
@@ -53,7 +55,7 @@ const PostModal: React.FC<Props> = ({
   const newImages = selectedFiles.filter((e) => e.preview);
   const newOther = selectedFiles.filter((e) => !e.preview);
 
-  return (
+  return createPortal(
     <div
       className={`fixed inset-0 z-50 flex items-center justify-center p-4 transition-all duration-200 ${
         visible ? "bg-black/40" : "bg-black/0"
@@ -283,7 +285,8 @@ const PostModal: React.FC<Props> = ({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 

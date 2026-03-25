@@ -1,5 +1,6 @@
 import React from "react";
 import { X, Loader2, CheckCircle2 } from "lucide-react";
+import { createPortal, useScrollLock } from "../../hooks/useModalPortal";
 
 interface Props {
   show: boolean;
@@ -18,9 +19,10 @@ const AttendanceModal: React.FC<Props> = ({
   attendanceSuccess, successVisible, errorMessage,
   onClose, onConfirm,
 }) => {
+  useScrollLock(show);
   if (!show) return null;
 
-  return (
+  return createPortal(
     <div
       className={`fixed inset-0 z-50 flex items-center justify-center p-4 transition-all duration-200 ${
         visible ? "bg-black/40" : "bg-black/0"
@@ -90,7 +92,8 @@ const AttendanceModal: React.FC<Props> = ({
           </>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 

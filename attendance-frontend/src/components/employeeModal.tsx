@@ -23,12 +23,19 @@ interface EmployeeModalProps {
   onUpdate?: () => void;
 }
 
+const ROLES = [
+  { value: "employee", label: "Employee" },
+  { value: "department_head", label: "Department Head" },
+  { value: "admin", label: "Admin" },
+] as const;
+
 interface EmployeeInfo {
   userid: number;
   name: string;
   defaultdeptid: number;
   PHOTO: string | null;
   badgenumber: string;
+  role: string | null;
 }
 
 interface GroupedAttendance {
@@ -66,6 +73,7 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({
   const [editName, setEditName] = useState("");
   const [editDeptId, setEditDeptId] = useState(0);
   const [editBadgeNumber, setEditBadgeNumber] = useState("");
+  const [editRole, setEditRole] = useState("employee");
   const [editPhoto, setEditPhoto] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
 
@@ -92,6 +100,7 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({
       setEditName(response.data.name);
       setEditDeptId(response.data.defaultdeptid);
       setEditBadgeNumber(response.data.badgenumber);
+      setEditRole(response.data.role ?? "employee");
 
       // Handle photo - base64 string
       if (response.data.PHOTO) {
@@ -252,6 +261,10 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({
         payload.badgenumber = editBadgeNumber;
       }
 
+      if (editRole !== (employee?.role ?? "employee")) {
+        payload.role = editRole;
+      }
+
       if (editPhoto) {
         const reader = new FileReader();
         const photoBytes = await new Promise<string>((resolve) => {
@@ -283,6 +296,7 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({
     setEditName(employee?.name || "");
     setEditDeptId(employee?.defaultdeptid || 0);
     setEditBadgeNumber(employee?.badgenumber || "");
+    setEditRole(employee?.role ?? "employee");
     setEditPhoto(null);
 
     if (employee?.PHOTO) {
@@ -491,6 +505,31 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({
                       ) : (
                         <p className="text-slate-300">
                           {getDepartmentName(employee.defaultdeptid)}
+                        </p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-2">
+                        Role
+                      </label>
+                      {isEditing ? (
+                        <select
+                          value={editRole}
+                          onChange={(e) => setEditRole(e.target.value)}
+                          className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-slate-600 transition-colors"
+                        >
+                          {ROLES.map((r) => (
+                            <option key={r.value} value={r.value}>
+                              {r.label}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <p className="text-slate-300">
+                          {ROLES.find(
+                            (r) => r.value === (employee.role ?? "employee"),
+                          )?.label ?? "Employee"}
                         </p>
                       )}
                     </div>

@@ -368,6 +368,19 @@ const DepartmentsPage: React.FC = () => {
                             {employee.badgenumber}
                           </p>
 
+                          {/* Role Badge */}
+                          {employee.role && (
+                            <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium mb-1 ${
+                              employee.role === "admin"
+                                ? "bg-purple-500/10 text-purple-400 border border-purple-500/20"
+                                : employee.role === "department_head"
+                                  ? "bg-blue-500/10 text-blue-400 border border-blue-500/20"
+                                  : "bg-slate-800 text-slate-400 border border-slate-700"
+                            }`}>
+                              {employee.role === "department_head" ? "Dept. Head" : employee.role.charAt(0).toUpperCase() + employee.role.slice(1)}
+                            </span>
+                          )}
+
                           {/* Status Text */}
                           {status && (
                             <div className="mt-2">

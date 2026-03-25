@@ -1,5 +1,6 @@
 import React from "react";
 import { X } from "lucide-react";
+import { createPortal, useScrollLock } from "../../hooks/useModalPortal";
 
 interface Props {
   show: boolean;
@@ -9,9 +10,10 @@ interface Props {
 }
 
 const LogoutModal: React.FC<Props> = ({ show, visible, onCancel, onConfirm }) => {
+  useScrollLock(show);
   if (!show) return null;
 
-  return (
+  return createPortal(
     <div
       className={`fixed inset-0 z-50 flex items-center justify-center p-4 transition-all duration-200 ${
         visible ? "bg-black/40" : "bg-black/0"
@@ -47,7 +49,8 @@ const LogoutModal: React.FC<Props> = ({ show, visible, onCancel, onConfirm }) =>
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
