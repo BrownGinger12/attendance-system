@@ -125,6 +125,12 @@ class Employee(BaseModel):
             }
             token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
+            avatar_rows = fetch_query(
+                "SELECT avatar_url FROM employee_avatars WHERE user_id = %s",
+                [row["USERID"]]
+            )
+            avatar_url = avatar_rows[0]["avatar_url"] if avatar_rows else None
+
             return {
                 "statusCode": 200,
                 "token": token,
@@ -133,6 +139,7 @@ class Employee(BaseModel):
                     "badge": row["Badgenumber"],
                     "name": row["Name"],
                     "department": department,
+                    "avatar_url": avatar_url,
                 },
             }
         except Exception as e:
