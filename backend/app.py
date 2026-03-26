@@ -72,7 +72,7 @@ from handler.attendance_watcher_handler import AttendanceWatcher
 # Flask + SocketIO setup
 # ------------------------------
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 
 @app.after_request
 def apply_cors(response):
