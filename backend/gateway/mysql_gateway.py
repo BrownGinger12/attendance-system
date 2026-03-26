@@ -51,3 +51,24 @@ def query(sql, params=None):
             cursor.close()
         if conn:
             conn.close()
+
+def query_insert(sql, params=None):
+    """
+    Executes an INSERT and returns the lastrowid.
+    Returns a dict with statusCode and insertId.
+    """
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute(sql, params or [])
+        conn.commit()
+        return {"statusCode": 200, "insertId": cursor.lastrowid}
+    except pymysql.Error as e:
+        return {"statusCode": 500, "message": str(e)}
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()

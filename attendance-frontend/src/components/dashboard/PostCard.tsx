@@ -11,6 +11,7 @@ const API_URL = import.meta.env.VITE_API_URL;
 interface Props {
   post: AccomplishmentPost;
   employee: EmployeeInfo;
+  isOwner?: boolean;
   openMenuPostId: number | null;
   onMenuToggle: (id: number | null) => void;
   onEdit: (post: AccomplishmentPost) => void;
@@ -20,6 +21,7 @@ interface Props {
 const PostCard: React.FC<Props> = ({
   post,
   employee,
+  isOwner = true,
   openMenuPostId,
   onMenuToggle,
   onEdit,
@@ -54,37 +56,39 @@ const PostCard: React.FC<Props> = ({
           </div>
         </div>
 
-        {/* Dropdown */}
-        <div className="relative">
-          <button
-            onClick={() =>
-              onMenuToggle(openMenuPostId === post.id ? null : post.id)
-            }
-            className="text-slate-400 dark:text-gray-500 hover:text-slate-600 dark:hover:text-gray-300 p-1 rounded-full hover:bg-slate-100 dark:hover:bg-gray-700"
-          >
-            <MoreHorizontal className="w-5 h-5" />
-          </button>
-          {openMenuPostId === post.id && (
-            <div className="absolute right-0 top-8 z-10 bg-white dark:bg-gray-700 rounded-xl shadow-lg border border-slate-100 dark:border-gray-600 py-1 w-36">
-              <button
-                onClick={() => {
-                  onMenuToggle(null);
-                  onEdit(post);
-                }}
-                className="w-full text-left px-4 py-2 text-sm text-slate-700 dark:text-gray-200 hover:bg-slate-50 dark:hover:bg-gray-600 flex items-center gap-2"
-              >
-                <FileText className="w-4 h-4 text-slate-400 dark:text-gray-400" />{" "}
-                Edit
-              </button>
-              <button
-                onClick={() => onDelete(post.id)}
-                className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2"
-              >
-                <X className="w-4 h-4" /> Delete
-              </button>
-            </div>
-          )}
-        </div>
+        {/* Dropdown — only shown for own posts */}
+        {isOwner && (
+          <div className="relative">
+            <button
+              onClick={() =>
+                onMenuToggle(openMenuPostId === post.id ? null : post.id)
+              }
+              className="text-slate-400 dark:text-gray-500 hover:text-slate-600 dark:hover:text-gray-300 p-1 rounded-full hover:bg-slate-100 dark:hover:bg-gray-700"
+            >
+              <MoreHorizontal className="w-5 h-5" />
+            </button>
+            {openMenuPostId === post.id && (
+              <div className="absolute right-0 top-8 z-10 bg-white dark:bg-gray-700 rounded-xl shadow-lg border border-slate-100 dark:border-gray-600 py-1 w-36">
+                <button
+                  onClick={() => {
+                    onMenuToggle(null);
+                    onEdit(post);
+                  }}
+                  className="w-full text-left px-4 py-2 text-sm text-slate-700 dark:text-gray-200 hover:bg-slate-50 dark:hover:bg-gray-600 flex items-center gap-2"
+                >
+                  <FileText className="w-4 h-4 text-slate-400 dark:text-gray-400" />{" "}
+                  Edit
+                </button>
+                <button
+                  onClick={() => onDelete(post.id)}
+                  className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2"
+                >
+                  <X className="w-4 h-4" /> Delete
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Content */}

@@ -57,6 +57,15 @@ from handler.accomplishment_handler import (
     serve_accomplishment_upload,
 )
 from handler.department_handler import get_departments, get_department_by_id
+from handler.sub_department_handler import (
+    get_my_sub_department,
+    create_sub_department,
+    rename_sub_department,
+    add_member,
+    remove_member,
+    search_candidates,
+    get_membership,
+)
 from handler.attendance_watcher_handler import AttendanceWatcher
 
 # ------------------------------
@@ -131,6 +140,44 @@ def departments():
 @app.route("/department/<int:dept_id>", methods=["GET"])
 def department(dept_id):
     return get_department_by_id(dept_id)
+
+# ------------------------------
+# Sub-department endpoints
+# ------------------------------
+@app.route("/sub-department/my", methods=["GET"])
+@employee_jwt_required
+def sub_department_my(current_employee):
+    return get_my_sub_department(current_employee)
+
+@app.route("/sub-department", methods=["POST"])
+@employee_jwt_required
+def sub_department_create(current_employee):
+    return create_sub_department(current_employee)
+
+@app.route("/sub-department/<int:sub_dept_id>", methods=["PUT"])
+@employee_jwt_required
+def sub_department_rename(current_employee, sub_dept_id):
+    return rename_sub_department(current_employee, sub_dept_id)
+
+@app.route("/sub-department/<int:sub_dept_id>/members", methods=["POST"])
+@employee_jwt_required
+def sub_department_add_member(current_employee, sub_dept_id):
+    return add_member(current_employee, sub_dept_id)
+
+@app.route("/sub-department/<int:sub_dept_id>/members/<int:employee_id>", methods=["DELETE"])
+@employee_jwt_required
+def sub_department_remove_member(current_employee, sub_dept_id, employee_id):
+    return remove_member(current_employee, sub_dept_id, employee_id)
+
+@app.route("/sub-department/<int:sub_dept_id>/candidates", methods=["GET"])
+@employee_jwt_required
+def sub_department_candidates(current_employee, sub_dept_id):
+    return search_candidates(current_employee, sub_dept_id)
+
+@app.route("/sub-department/membership", methods=["GET"])
+@employee_jwt_required
+def sub_department_membership(current_employee):
+    return get_membership(current_employee)
 
 # ------------------------------
 # Employee endpoints

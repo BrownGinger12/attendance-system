@@ -18,6 +18,7 @@ def get_profile(current_employee):
             "name": current_employee["Name"],
             "badge": current_employee["Badgenumber"],
             "avatar_url": avatar_url,
+            "role": current_employee.get("role"),
         }), 200
     except Exception as e:
         return jsonify({"message": str(e)}), 500
@@ -63,7 +64,7 @@ def change_profile_password(current_employee):
         new_password = data.get("new_password", "")
         if not old_password or not new_password:
             return jsonify({"message": "old_password and new_password are required"}), 400
-        badge = current_employee["Badgenumber"]
+        badge = current_employee["badgenumber"]
         result = Employee.change_password(badge, old_password, new_password)
         return jsonify(result), result["statusCode"]
     except Exception as e:

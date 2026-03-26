@@ -96,7 +96,7 @@ class Employee(BaseModel):
         try:
             sql = """
                 SELECT e.USERID, e.Badgenumber, e.Name, e.PASSWORD,
-                       d.deptname
+                       e.role, d.deptname
                 FROM employees e
                 LEFT JOIN departments d ON d.deptid = e.DEFAULTDEPTID
                 WHERE e.Badgenumber = %s
@@ -141,6 +141,7 @@ class Employee(BaseModel):
                     "name": row["Name"],
                     "department": department,
                     "avatar_url": avatar_url,
+                    "role": row.get("role"),
                 },
             }
         except Exception as e:

@@ -30,6 +30,8 @@ const EmployeeDashboardPage: React.FC = () => {
   const [attendanceSuccess, setAttendanceSuccess] = useState(false);
   const [successVisible, setSuccessVisible] = useState(false);
 
+  const [homeResetKey, setHomeResetKey] = useState(0);
+
   // Logout
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
@@ -82,7 +84,7 @@ const EmployeeDashboardPage: React.FC = () => {
       .then((r) => r.json())
       .then((data) => {
         if (data.statusCode === 200) {
-          const updated = { ...emp, name: data.name ?? emp.name, avatar_url: data.avatar_url ?? emp.avatar_url };
+          const updated = { ...emp, name: data.name ?? emp.name, avatar_url: data.avatar_url ?? emp.avatar_url, role: data.role ?? emp.role };
           setEmployee(updated);
           localStorage.setItem("employeeData", JSON.stringify(updated));
         }
@@ -140,7 +142,7 @@ const EmployeeDashboardPage: React.FC = () => {
       case "department":
         return <EmployeeDepartmentPage employee={employee} />;
       default:
-        return <EmployeeHomePage employee={employee} />;
+        return <EmployeeHomePage employee={employee} resetKey={homeResetKey} />;
     }
   };
 
@@ -161,6 +163,7 @@ const EmployeeDashboardPage: React.FC = () => {
         onClose={() => setSidebarOpen(false)}
         onLogout={() => setShowLogoutModal(true)}
         onPageChange={(page) => { setSidebarOpen(false); setActivePage(page as Page); }}
+        onProfileClick={() => setHomeResetKey((k) => k + 1)}
       />
 
       <div className="flex-1 flex flex-col overflow-hidden">

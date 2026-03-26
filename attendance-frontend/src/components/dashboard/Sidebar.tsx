@@ -9,11 +9,12 @@ interface Props {
   onClose: () => void;
   onLogout: () => void;
   onPageChange?: (page: string) => void;
+  onProfileClick?: () => void;
 }
 
 const API_URL = import.meta.env.VITE_API_URL;
 
-const Sidebar: React.FC<Props> = ({ employee, sidebarOpen, activePage = "home", onClose, onLogout, onPageChange }) => {
+const Sidebar: React.FC<Props> = ({ employee, sidebarOpen, activePage = "home", onClose, onLogout, onPageChange, onProfileClick }) => {
   const go = (page: string) => {
     onPageChange?.(page);
     onClose();
@@ -54,7 +55,7 @@ const Sidebar: React.FC<Props> = ({ employee, sidebarOpen, activePage = "home", 
 
         {/* Employee info */}
         <div className="px-4 py-4 border-b border-slate-100 dark:border-gray-700">
-          <button onClick={() => go("home")} className="w-full flex items-center gap-3 p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-gray-700 transition-colors text-left">
+          <button onClick={() => { go("home"); onProfileClick?.(); }} className="w-full flex items-center gap-3 p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-gray-700 transition-colors text-left">
             <div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center flex-shrink-0 text-white font-bold text-sm overflow-hidden">
               {employee?.avatar_url
                 ? <img src={`${API_URL}${employee.avatar_url}`} alt={employee.name} className="w-full h-full object-cover" />
@@ -73,10 +74,12 @@ const Sidebar: React.FC<Props> = ({ employee, sidebarOpen, activePage = "home", 
             <Home className="w-5 h-5 flex-shrink-0" />
             Home
           </button>
-          <button onClick={() => go("department")} className={navCls("department")}>
-            <Users className="w-5 h-5 flex-shrink-0" />
-            Department
-          </button>
+          {employee?.role === "department_head" && (
+            <button onClick={() => go("department")} className={navCls("department")}>
+              <Users className="w-5 h-5 flex-shrink-0" />
+              Department
+            </button>
+          )}
           <button onClick={() => go("settings")} className={navCls("settings")}>
             <Settings className="w-5 h-5 flex-shrink-0" />
             Settings

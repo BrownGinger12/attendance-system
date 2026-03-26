@@ -4,6 +4,7 @@ export interface EmployeeInfo {
   name: string;
   department: string;
   avatar_url?: string | null;
+  role?: string | null;
 }
 
 export type DateFilter = "all" | "today" | "week" | "month" | "custom";

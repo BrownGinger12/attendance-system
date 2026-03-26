@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Loader2, CalendarDays } from "lucide-react";
+import { CalendarDays } from "lucide-react";
 import { EmployeeInfo, AccomplishmentPost, DateFilter } from "../types/dashboard";
 import PostCardSkeleton from "../components/dashboard/PostCardSkeleton";
 import ProfileHeader from "../components/dashboard/ProfileHeader";
@@ -8,14 +8,23 @@ import FilterBar from "../components/dashboard/FilterBar";
 import PostCard from "../components/dashboard/PostCard";
 import PostModal from "../components/dashboard/PostModal";
 import DeleteConfirmModal from "../components/dashboard/DeleteConfirmModal";
+import TeamFloatingButton from "../components/dashboard/TeamFloatingButton";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
 interface Props {
   employee: EmployeeInfo | null;
+  resetKey?: number;
 }
 
-const EmployeeHomePage: React.FC<Props> = ({ employee }) => {
+const EmployeeHomePage: React.FC<Props> = ({ employee, resetKey }) => {
+  // Which profile is being viewed (null = own profile)
+  const [viewedMember, setViewedMember] = useState<EmployeeInfo | null>(null);
+
+  // Reset to own profile when parent increments resetKey (e.g. profile card click in Sidebar)
+  useEffect(() => { setViewedMember(null); }, [resetKey]);
+  const displayEmployee = viewedMember ?? employee;
+
   const [posts, setPosts] = useState<AccomplishmentPost[]>([]);
   const [postsLoading, setPostsLoading] = useState(true);
   const [editingPost, setEditingPost] = useState<AccomplishmentPost | null>(null);
@@ -35,6 +44,7 @@ const EmployeeHomePage: React.FC<Props> = ({ employee }) => {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const today = new Date().toISOString().split("T")[0];
+  const isViewingOther = viewedMember !== null;
 
   useEffect(() => {
     if (showPostModal) {
@@ -58,14 +68,23 @@ const EmployeeHomePage: React.FC<Props> = ({ employee }) => {
       const res = await fetch(`${API_URL}/accomplishments/user/${employeeId}?limit=50`);
       const data = await res.json();
       if (data.statusCode === 200) setPosts(data.data);
-    } catch { /* silent */ } finally {
+      else setPosts([]);
+    } catch { setPosts([]); } finally {
       setPostsLoading(false);
     }
   };
 
+  // Refetch posts whenever the viewed profile changes
   useEffect(() => {
-    if (employee?.id) fetchPosts(employee.id);
-  }, [employee?.id]);
+    const id = displayEmployee?.id;
+    if (id) fetchPosts(id);
+  }, [displayEmployee?.id]);
+
+  const handleViewMember = (member: EmployeeInfo) => {
+    setPosts([]);
+    setViewedMember(member);
+    setDateFilter("all");
+  };
 
   const openPostModal = (post?: AccomplishmentPost) => {
     setEditingPost(post ?? null);
@@ -196,11 +215,18 @@ const EmployeeHomePage: React.FC<Props> = ({ employee }) => {
 
   return (
     <>
-      <ProfileHeader employee={employee} />
+      {/* Profile header — animate when switching between profiles */}
+      <div key={`header-${displayEmployee?.id}`} className="animate-fade-in-up">
+        <ProfileHeader employee={displayEmployee} />
+      </div>
 
       <div className="max-w-3xl mx-auto px-4 md:px-6 py-4">
-        <div className="space-y-3">
-          <CreatePostBox employee={employee} onOpen={() => openPostModal()} />
+        {/* Content — re-key to animate when profile switches */}
+        <div key={`content-${displayEmployee?.id}`} className="animate-fade-in-up space-y-3">
+          {/* Only show CreatePostBox on own profile */}
+          {!isViewingOther && (
+            <CreatePostBox employee={employee} onOpen={() => openPostModal()} />
+          )}
 
           <FilterBar
             dateFilter={dateFilter}
@@ -222,7 +248,11 @@ const EmployeeHomePage: React.FC<Props> = ({ employee }) => {
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-8 text-center">
               <CalendarDays className="w-8 h-8 text-slate-300 dark:text-gray-600 mx-auto mb-2" />
               <p className="text-sm text-slate-400 dark:text-gray-500">
-                {posts.length === 0 ? "No accomplishments posted yet." : "No posts found for the selected date range."}
+                {posts.length === 0
+                  ? isViewingOther
+                    ? `${displayEmployee?.name} hasn't posted any accomplishments yet.`
+                    : "No accomplishments posted yet."
+                  : "No posts found for the selected date range."}
               </p>
             </div>
           ) : (
@@ -230,7 +260,8 @@ const EmployeeHomePage: React.FC<Props> = ({ employee }) => {
               <PostCard
                 key={post.id}
                 post={post}
-                employee={employee!}
+                employee={displayEmployee!}
+                isOwner={!isViewingOther}
                 openMenuPostId={openMenuPostId}
                 onMenuToggle={setOpenMenuPostId}
                 onEdit={openPostModal}
@@ -240,6 +271,14 @@ const EmployeeHomePage: React.FC<Props> = ({ employee }) => {
           )}
         </div>
       </div>
+
+      {/* Floating team button — department heads only */}
+      {employee?.role === "department_head" && (
+        <TeamFloatingButton
+          currentEmployee={employee}
+          onViewMember={handleViewMember}
+        />
+      )}
 
       <PostModal
         show={showPostModal}
