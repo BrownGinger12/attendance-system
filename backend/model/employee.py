@@ -299,7 +299,7 @@ class Employee(BaseModel):
             return {"statusCode": 500, "message": str(e)}
 
     _UPDATABLE_COLUMNS: ClassVar[set] = {
-        "Name", "DEFAULTDEPTID", "badgenumber", "SSN", "Gender", "TITLE", "PAGER", "BIRTHDAY",
+        "Name", "defaultdeptid", "badgenumber", "SSN", "Gender", "TITLE", "PAGER", "BIRTHDAY",
         "HIREDDAY", "street", "CITY", "STATE", "ZIP", "OPHONE", "FPHONE",
         "VERIFICATIONMETHOD", "SECURITYFLAGS", "ATT", "INLATE", "OUTEARLY",
         "OVERTIME", "SEP", "HOLIDAY", "MINZU", "PASSWORD", "LUNCHDURATION",
