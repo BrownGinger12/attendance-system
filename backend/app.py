@@ -56,7 +56,7 @@ from handler.accomplishment_handler import (
     delete_file_from_accomplishment,
     serve_accomplishment_upload,
 )
-from handler.department_handler import get_departments, get_department_by_id
+from handler.department_handler import get_departments, get_department_by_id, create_department, update_department, delete_department
 from handler.sub_department_handler import (
     get_my_sub_department,
     create_sub_department,
@@ -140,6 +140,18 @@ def departments():
 @app.route("/department/<int:dept_id>", methods=["GET"])
 def department(dept_id):
     return get_department_by_id(dept_id)
+
+@app.route("/department", methods=["POST"])
+def department_create():
+    return create_department()
+
+@app.route("/department/<int:dept_id>", methods=["PUT"])
+def department_update(dept_id):
+    return update_department(dept_id)
+
+@app.route("/department/<int:dept_id>", methods=["DELETE"])
+def department_delete(dept_id):
+    return delete_department(dept_id)
 
 # ------------------------------
 # Sub-department endpoints

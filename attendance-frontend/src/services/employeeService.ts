@@ -207,6 +207,24 @@ export const employeeService = {
     return response.data;
   },
 
+  // Create department
+  createDepartment: async (deptname: string, supdeptid?: number) => {
+    const response = await apiClient.post("/department", { deptname, supdeptid });
+    return response.data;
+  },
+
+  // Update department
+  updateDepartment: async (deptId: number, deptname: string) => {
+    const response = await apiClient.put(`/department/${deptId}`, { deptname });
+    return response.data;
+  },
+
+  // Delete department
+  deleteDepartment: async (deptId: number) => {
+    const response = await apiClient.delete(`/department/${deptId}`);
+    return response.data;
+  },
+
   // Get all attendance records
   getAllAttendance: async (): Promise<AttendanceResponse> => {
     const response = await apiClient.get<AttendanceResponse>("/attendance");
