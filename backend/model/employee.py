@@ -413,10 +413,11 @@ class Employee(BaseModel):
     def get_by_department(dept_id: int):
         try:
             sql = """
-            SELECT *
-            FROM employees
-            WHERE DEFAULTDEPTID = %s
-            ORDER BY USERID
+            SELECT e.*, ea.avatar_url
+            FROM employees e
+            LEFT JOIN employee_avatars ea ON ea.user_id = e.USERID
+            WHERE e.DEFAULTDEPTID = %s
+            ORDER BY e.USERID
             """
             rows = fetch_query(sql, [dept_id])
 

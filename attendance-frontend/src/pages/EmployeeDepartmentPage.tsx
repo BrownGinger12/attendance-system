@@ -45,7 +45,6 @@ const EmployeeDepartmentPage: React.FC<Props> = ({ employee }) => {
     (async () => {
       try {
         const res = await fetch(`${API_URL}/employees/department/${deptId}`);
-        console.log("Department members response:", res);
         const data = await res.json();
         if (data.statusCode === 200 && data.data) {
           setMembers(
