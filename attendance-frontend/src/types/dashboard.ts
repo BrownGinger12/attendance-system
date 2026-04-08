@@ -3,6 +3,7 @@ export interface EmployeeInfo {
   badge: string;
   name: string;
   department: string;
+  dept_id?: number | null;
   avatar_url?: string | null;
   role?: string | null;
 }

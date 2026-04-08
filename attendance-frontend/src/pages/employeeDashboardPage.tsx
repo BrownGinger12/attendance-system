@@ -84,7 +84,7 @@ const EmployeeDashboardPage: React.FC = () => {
       .then((r) => r.json())
       .then((data) => {
         if (data.statusCode === 200) {
-          const updated = { ...emp, name: data.name ?? emp.name, avatar_url: data.avatar_url ?? emp.avatar_url, role: data.role ?? emp.role };
+          const updated = { ...emp, name: data.name ?? emp.name, avatar_url: data.avatar_url ?? emp.avatar_url, role: data.role ?? emp.role, dept_id: data.dept_id ?? emp.dept_id };
           setEmployee(updated);
           localStorage.setItem("employeeData", JSON.stringify(updated));
         }

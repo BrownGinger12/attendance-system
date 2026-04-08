@@ -19,6 +19,7 @@ def get_profile(current_employee):
             "badge": current_employee["Badgenumber"],
             "avatar_url": avatar_url,
             "role": current_employee.get("role"),
+            "dept_id": current_employee.get("DEFAULTDEPTID") or current_employee.get("defaultdeptid"),
         }), 200
     except Exception as e:
         return jsonify({"message": str(e)}), 500

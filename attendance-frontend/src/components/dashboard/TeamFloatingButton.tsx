@@ -45,23 +45,43 @@ const TeamFloatingButton: React.FC<Props> = ({ currentEmployee, onViewMember }) 
 
   // Fetch members once on first open
   useEffect(() => {
-    if (!open || fetched) return;
+    if (!open || fetched || !currentEmployee?.dept_id) return;
     (async () => {
       setLoading(true);
       try {
-        const token = localStorage.getItem("employeeToken");
-        const res   = await fetch(`${API_URL}/sub-department/membership`, {
-          headers: { "x-access-token": token ?? "" },
-        });
-        const data  = await res.json();
-        if (data.statusCode === 200 && data.data) {
-          setMembers(data.data.members ?? []);
-          setFetched(true);
+        const deptId = currentEmployee.dept_id;
+        const today  = new Date().toISOString().split("T")[0];
+
+        const [empRes, attRes] = await Promise.all([
+          fetch(`${API_URL}/employees/department/${deptId}`),
+          fetch(`${API_URL}/attendance/day?day=${today}`),
+        ]);
+
+        const empData = await empRes.json();
+        const attData = await attRes.json();
+
+        const attendanceList: { userid: number; checktype: string }[] = attData.data ?? [];
+        const statusMap = new Map<number, string>();
+        for (const a of attendanceList) {
+          // keep only the latest checktype per user (list is DESC)
+          if (!statusMap.has(a.userid)) statusMap.set(a.userid, a.checktype);
         }
+
+        const list: TeamMember[] = (empData.data ?? []).map((e: any) => ({
+          userid:     e.userid,
+          name:       e.name ?? e.Name,
+          badge:      e.badgenumber ?? e.Badgenumber,
+          role:       e.role ?? null,
+          avatar_url: e.avatar_url ?? null,
+          is_online:  statusMap.get(e.userid) === "I",
+        }));
+
+        setMembers(list);
+        setFetched(true);
       } catch { /* ignore */ }
       finally { setLoading(false); }
     })();
-  }, [open]);
+  }, [open, currentEmployee?.dept_id]);
 
   const handleSelect = (m: TeamMember) => {
     // Close with animation first, then switch profile
